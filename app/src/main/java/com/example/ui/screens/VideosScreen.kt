@@ -50,28 +50,37 @@ import com.example.ui.svg.AgnesSvgIcon
 fun VideosScreen(
     queueItems: List<QueueItemEntity>,
     isGenerating: Boolean,
-    onGenerateVideo: (prompt: String, mode: String, startImg: String?, duration: Int, resolution: String) -> Unit,
+    onGenerateVideo: (prompt: String, mode: String, startImg: String?, duration: Int, resolution: String, numFrames: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var mode by remember { mutableStateOf("image") } // "text" | "image"
     var prompt by remember {
-        mutableStateOf("Travelling avant cinématique continu, reflets de pluie sur l'asphalte, néons vacillants, ralenti fluide")
+        mutableStateOf("")
     }
-    var durationSeconds by remember { mutableIntStateOf(5) }
+    var selectedFrameSetting by remember { mutableStateOf(121 to "≈ 5 s – 121 frames") }
     var selectedResolution by remember { mutableStateOf("720p 16:9") }
     var hasPickedStartImage by remember { mutableStateOf(false) }
+    var pickedImageSource by remember { mutableStateOf<String?>(null) }
 
-    val resolutions = listOf("720p 16:9", "1080p 16:9", "720p 9:16")
+    // Règle 8n + 1 (Section 11.2 du cahier des charges)
+    val durationOptions = listOf(
+        81 to "≈ 3.4 s – 81 frames",
+        121 to "≈ 5.0 s – 121 frames",
+        153 to "≈ 6.4 s – 153 frames",
+        241 to "≈ 10.0 s – 241 frames"
+    )
+
+    val resolutions = listOf("720p 16:9", "576x1024 9:16", "1080p 16:9")
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0C0C11))
+            .background(Color(0xFF0A0A0F))
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
         Text(
-            text = "Génération de vidéo",
+            text = "Vidéos",
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold
@@ -79,12 +88,12 @@ fun VideosScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Mode : ( ) Texte  (•) Image
+        // Mode : ( ) Texte → Vidéo  (•) Image → Vidéo
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(text = "Mode : ", color = Color(0xFFA1A1AA), fontSize = 14.sp)
+            Text(text = "Mode : ", color = Color(0xFFA1A1AA), fontSize = 13.sp)
             Spacer(modifier = Modifier.width(6.dp))
 
             Row(
@@ -94,19 +103,12 @@ fun VideosScreen(
                 RadioButton(
                     selected = mode == "text",
                     onClick = { mode = "text" },
-                    colors = RadioButtonDefaults.colors(
-                        selectedColor = Color(0xFF8B5CF6),
-                        unselectedColor = Color(0xFF555566)
-                    )
+                    colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF8B5CF6), unselectedColor = Color(0xFF555566))
                 )
-                Text(
-                    text = "Texte",
-                    color = if (mode == "text") Color.White else Color(0xFF888899),
-                    fontSize = 13.sp
-                )
+                Text(text = "Texte → Vidéo", color = if (mode == "text") Color.White else Color(0xFF888899), fontSize = 13.sp)
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -115,20 +117,13 @@ fun VideosScreen(
                 RadioButton(
                     selected = mode == "image",
                     onClick = { mode = "image" },
-                    colors = RadioButtonDefaults.colors(
-                        selectedColor = Color(0xFF8B5CF6),
-                        unselectedColor = Color(0xFF555566)
-                    )
+                    colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF8B5CF6), unselectedColor = Color(0xFF555566))
                 )
-                Text(
-                    text = "Image",
-                    color = if (mode == "image") Color.White else Color(0xFF888899),
-                    fontSize = 13.sp
-                )
+                Text(text = "Image → Vidéo", color = if (mode == "image") Color.White else Color(0xFF888899), fontSize = 13.sp)
             }
         }
 
-        // Image de départ (si mode img)
+        // Image de départ (si mode image)
         AnimatedVisibility(visible = mode == "image") {
             Column {
                 Spacer(modifier = Modifier.height(10.dp))
@@ -141,24 +136,19 @@ fun VideosScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Prompt de mouvement
-        Text(
-            text = "Prompt de mouvement",
-            color = Color(0xFFA1A1AA),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium
-        )
+        // Prompt de mouvement (textarea)
+        Text(text = "Prompt de mouvement", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.height(6.dp))
         OutlinedTextField(
             value = prompt,
             onValueChange = { prompt = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(105.dp),
-            placeholder = { Text("Trajectoire de caméra, vitesse, dynamique de scène...", color = Color(0xFF555566)) },
+                .height(100.dp),
+            placeholder = { Text("Trajectoire de caméra, dynamique et ambiance...", color = Color(0xFF555566)) },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFF14141C),
-                unfocusedContainerColor = Color(0xFF14141C),
+                focusedContainerColor = Color(0xFF13131A),
+                unfocusedContainerColor = Color(0xFF13131A),
                 focusedBorderColor = Color(0xFF8B5CF6),
                 unfocusedBorderColor = Color(0xFF282836),
                 focusedTextColor = Color.White,
@@ -167,32 +157,28 @@ fun VideosScreen(
             shape = RoundedCornerShape(12.dp)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // Durée : [5s ≈ 121 frames] [10s ≈ 242 frames]
-        Text(text = "Durée", color = Color(0xFFA1A1AA), fontSize = 12.sp)
+        // Durée [≈ 5 s – 121 frames ▼]
+        Text(text = "Durée (Règle 8n + 1)", color = Color(0xFFA1A1AA), fontSize = 12.sp)
         Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            listOf(5 to "5s ≈ 121 frames", 10 to "10s ≈ 242 frames").forEach { (d, label) ->
-                val isSelected = durationSeconds == d
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            durationOptions.forEach { opt ->
+                val isSelected = selectedFrameSetting.first == opt.first
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) Color(0xFF7C3AED) else Color(0xFF1A1A24))
-                        .border(
-                            1.dp,
-                            if (isSelected) Color(0xFFA78BFA) else Color(0xFF2E2E3E),
-                            RoundedCornerShape(8.dp)
-                        )
-                        .clickable { durationSeconds = d }
-                        .padding(vertical = 10.dp),
+                        .background(if (isSelected) Color(0xFF7C3AED) else Color(0xFF1C1C25))
+                        .border(1.dp, if (isSelected) Color(0xFFA78BFA) else Color(0xFF2E2E3E), RoundedCornerShape(8.dp))
+                        .clickable { selectedFrameSetting = opt }
+                        .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = label,
+                        text = opt.second.replace(" frames", "f"),
                         color = if (isSelected) Color.White else Color(0xFFBBBBD0),
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -211,7 +197,7 @@ fun VideosScreen(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) Color(0xFF7C3AED) else Color(0xFF1A1A24))
+                        .background(if (isSelected) Color(0xFF7C3AED) else Color(0xFF1C1C25))
                         .clickable { selectedResolution = res }
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
@@ -219,7 +205,7 @@ fun VideosScreen(
                     Text(
                         text = res,
                         color = if (isSelected) Color.White else Color(0xFFBBBBD0),
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -233,9 +219,15 @@ fun VideosScreen(
             text = if (isGenerating) "Génération vidéo en cours..." else "Générer la vidéo",
             onClick = {
                 val startImg = if (mode == "image" && hasPickedStartImage) {
-                    "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800"
+                    pickedImageSource
                 } else null
-                onGenerateVideo(prompt, mode, startImg, durationSeconds, selectedResolution)
+                val durationSec = when (selectedFrameSetting.first) {
+                    81 -> 3
+                    121 -> 5
+                    153 -> 6
+                    else -> 10
+                }
+                onGenerateVideo(prompt, mode, startImg, durationSec, selectedResolution, selectedFrameSetting.first)
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = !isGenerating && prompt.isNotBlank(),
@@ -243,7 +235,7 @@ fun VideosScreen(
             icon = AgnesIcon.VIDEO
         )
 
-        Spacer(modifier = Modifier.height(26.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // ── File d’attente ──
         Text(
@@ -260,61 +252,38 @@ fun VideosScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(70.dp)
+                    .height(64.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF14141C)),
+                    .background(Color(0xFF13131A)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Aucune tâche en file d'attente",
-                    color = Color(0xFF6B7280),
-                    fontSize = 13.sp
-                )
+                Text(text = "Aucune tâche en file d'attente", color = Color(0xFF71717A), fontSize = 13.sp)
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 activeQueue.forEach { item ->
                     val isStalled = item.status == "stalled"
 
-                    AgnesInteractiveCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        isStalled = isStalled
-                    ) {
+                    AgnesInteractiveCard(modifier = Modifier.fillMaxWidth(), isStalled = isStalled) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                     if (item.status == "processing") {
-                                        AgnesSvgIcon(
-                                            icon = AgnesIcon.LIVE_DOT,
-                                            tint = Color(0xFF10B981),
-                                            size = 14.dp
-                                        )
+                                        AgnesSvgIcon(icon = AgnesIcon.LIVE_DOT, tint = Color(0xFF10B981), size = 14.dp)
                                     } else if (isStalled) {
-                                        AgnesSvgIcon(
-                                            icon = AgnesIcon.WARNING,
-                                            tint = Color(0xFFF59E0B),
-                                            size = 16.dp
-                                        )
+                                        AgnesSvgIcon(icon = AgnesIcon.WARNING, tint = Color(0xFFF59E0B), size = 16.dp)
                                     } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(10.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFF888899))
-                                        )
+                                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF888899)))
                                     }
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
                                         text = item.title,
                                         color = Color.White,
-                                        fontSize = 14.sp,
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium,
                                         maxLines = 1
                                     )
@@ -330,7 +299,7 @@ fun VideosScreen(
                                     )
                                 } else {
                                     Text(
-                                        text = if (isStalled) "Stall détecté" else "${item.progress}%",
+                                        text = if (isStalled) "Stall détecté" else "${item.progress} %",
                                         color = if (isStalled) Color(0xFFF59E0B) else Color(0xFFA78BFA),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold

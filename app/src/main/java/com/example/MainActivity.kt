@@ -81,7 +81,7 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = Color(0xFF0C0C11),
+        containerColor = Color(0xFF0A0A0F),
         contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             AgnesHeader(
@@ -105,7 +105,7 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFF0C0C11))
+                .background(Color(0xFF0A0A0F))
         ) {
             when (currentScreen) {
                 AgnesScreen.IMAGES -> {
@@ -124,8 +124,8 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                     VideosScreen(
                         queueItems = queueItems,
                         isGenerating = isVideoGenerating,
-                        onGenerateVideo = { prompt, mode, startImg, duration, resolution ->
-                            viewModel.generateVideo(prompt, mode, startImg, duration, resolution)
+                        onGenerateVideo = { prompt, mode, startImg, duration, resolution, numFrames ->
+                            viewModel.generateVideo(prompt, mode, startImg, duration, resolution, numFrames)
                         }
                     )
                 }
@@ -137,8 +137,8 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                         currentStepText = filmStepText,
                         elapsedSeconds = filmElapsedSeconds,
                         currentScenes = currentFilmScenes,
-                        onStartNewFilm = { title, prompt, style, numScenes ->
-                            viewModel.startNewFilm(title, prompt, style, numScenes)
+                        onStartNewFilm = { title, prompt, style, requestedDurationSeconds, manualScenes, startImage ->
+                            viewModel.startNewFilm(title, prompt, style, requestedDurationSeconds, manualScenes, startImage)
                         },
                         onCancelGeneration = {
                             viewModel.cancelFilmGeneration()
@@ -178,6 +178,7 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                         settings = settings,
                         todayUsage = todayUsage,
                         onSaveSettings = { viewModel.saveSettings(it) },
+                        onDeleteApiKey = { viewModel.deleteApiKey() },
                         onOpenLogs = { viewModel.showLogs(true) }
                     )
                 }

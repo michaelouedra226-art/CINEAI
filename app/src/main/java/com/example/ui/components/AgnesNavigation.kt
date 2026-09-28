@@ -41,15 +41,16 @@ import com.example.ui.svg.AgnesSvgIcon
 enum class AgnesScreen(val title: String, val icon: AgnesIcon) {
     IMAGES("Images", AgnesIcon.HOME_IMAGES),
     VIDEOS("Vidéos", AgnesIcon.VIDEO),
-    FILM("Film Studio", AgnesIcon.FILM),
+    FILM("Film", AgnesIcon.FILM),
     GALLERY("Galerie", AgnesIcon.GALLERY),
-    CHAT("Chat IA", AgnesIcon.CHAT),
+    CHAT("Chat", AgnesIcon.CHAT),
     SETTINGS("Réglages", AgnesIcon.SETTINGS)
 }
 
 /**
  * Header sticky conforme aux wireframes :
  * [←] Titre de la page [⚙] [📚]
+ * Fond semi-transparent #0A0A0F
  */
 @Composable
 fun AgnesHeader(
@@ -66,13 +67,13 @@ fun AgnesHeader(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF0C0C11))
+            .background(Color(0xFF0A0A0F))
     ) {
         Spacer(modifier = Modifier.height(statusBarPadding))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(60.dp)
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -151,12 +152,12 @@ fun AgnesHeader(
                 }
             }
         }
-        HorizontalDivider(color = Color(0xFF1E1E28), thickness = 1.dp)
+        HorizontalDivider(color = Color(0xFF1C1C25), thickness = 1.dp)
     }
 }
 
 /**
- * Tabbar fixe avec indicateur qui glisse avec spring (Micro-interaction obligatoire).
+ * Tabbar fixe 68px + safe-area avec indicateur qui glisse avec animation spring.
  * Onglets : [Images] [Vidéos] [Film] [Galerie] [Chat]
  */
 @Composable
@@ -180,14 +181,14 @@ fun AgnesBottomBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF0D0D12))
+            .background(Color(0xFF13131A))
     ) {
-        HorizontalDivider(color = Color(0xFF1C1C26), thickness = 1.dp)
+        HorizontalDivider(color = Color(0xFF1C1C25), thickness = 1.dp)
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
+                .height(68.dp)
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceAround
@@ -207,7 +208,7 @@ fun AgnesBottomBar(
                                 onScreenSelected(screen)
                             }
                         )
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -230,13 +231,24 @@ fun AgnesBottomBar(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(3.dp))
 
                         Text(
                             text = screen.title,
                             color = if (isSelected) Color(0xFFA78BFA) else Color(0xFF71717A),
                             fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                        )
+
+                        Spacer(modifier = Modifier.height(3.dp))
+
+                        // Indicateur animé sous l'onglet actif
+                        Box(
+                            modifier = Modifier
+                                .width(if (isSelected) 18.dp else 0.dp)
+                                .height(2.5.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (isSelected) Color(0xFF8B5CF6) else Color.Transparent)
                         )
                     }
                 }

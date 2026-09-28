@@ -53,7 +53,7 @@ fun ImagesScreen(
     modifier: Modifier = Modifier
 ) {
     var prompt by remember {
-        mutableStateOf("Plan large cinématique, métropole futuriste sous une pluie néon violette et cyan, éclairage volumétrique, photoréaliste 8k")
+        mutableStateOf("")
     }
     var selectedStyle by remember { mutableStateOf("Cinématique") }
     var selectedSize by remember { mutableStateOf("2K") }
@@ -69,12 +69,12 @@ fun ImagesScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0C0C11))
+            .background(Color(0xFF0A0A0F))
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
         Text(
-            text = "Génération d'image",
+            text = "Images",
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold

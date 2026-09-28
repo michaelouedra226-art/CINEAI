@@ -15,6 +15,10 @@ class UsageTracker(private val usageDao: UsageDao) {
         return sdf.format(Date())
     }
 
+    suspend fun getUsageForDate(date: String): UsageEntity? = withContext(Dispatchers.IO) {
+        usageDao.getUsageForDateDirect(date)
+    }
+
     suspend fun recordTextRequest() = withContext(Dispatchers.IO) {
         val date = getTodayDateString()
         val current = usageDao.getUsageForDateDirect(date) ?: UsageEntity(date = date)

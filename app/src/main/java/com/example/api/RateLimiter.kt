@@ -1,5 +1,6 @@
 package com.example.api
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -9,6 +10,8 @@ import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.max
 
 data class TechLog(
     val timestamp: Long = System.currentTimeMillis(),
@@ -48,46 +51,59 @@ class RateLimiter {
     private var lastVideoTimestamp: Long = 0L
 
     companion object {
-        const val FREE_COOLDOWN_MS = 65_000L
-        const val TOKEN_COOLDOWN_MS = 15_000L
-        const val ENTERPRISE_COOLDOWN_MS = 0L
+        const val MAX_VIDEO_SECONDS_PER_DAY = 500.0
 
+        const val FIRST_POLL_DELAY_MS = 120_000L
+        const val POLL_INTERVAL_MS = 30_000L
+        const val MAX_POLL_ATTEMPTS = 20
+
+        const val STALL_THRESHOLD = 6 // 6 polls identiques => stall
+        const val STALL_RETRY_DELAY_MS = 90_000L
         const val MAX_STALL_RETRIES = 3
-        const val STALL_THRESHOLD_MS = 25_000L
+
+        const val RETRY_429_WAIT_MS = 90_000L
+        const val RETRY_503_WAIT_MS = 20_000L
+        const val IMAGE_CALL_DELAY_MS = 4_000L
+
+        const val VIDEO_PAUSE_MS_FREE = 61_000L
+        const val VIDEO_PAUSE_MS_TOKEN = 12_000L
+        const val VIDEO_PAUSE_MS_ENTERPRISE = 0L
     }
 
     /**
-     * Strict realWait implementation based on Date.now() / System.currentTimeMillis().
-     * Emits tick callbacks with remaining seconds for micro-interaction countdown displays.
+     * Attente anti-throttling basée sur System.currentTimeMillis() avec support d'annulation propre.
      */
-    suspend fun realWait(targetDurationMs: Long, onTick: (suspend (remainingSeconds: Int) -> Unit)? = null) {
-        val startTime = System.currentTimeMillis()
-        val endTime = startTime + targetDurationMs
-
-        while (true) {
-            val now = System.currentTimeMillis()
-            val remainingMs = endTime - now
-            if (remainingMs <= 0) break
-
-            val remainingSec = ((remainingMs + 999) / 1000).toInt()
-            onTick?.invoke(remainingSec)
-
-            val step = if (remainingMs > 1000) 1000L else remainingMs
-            delay(step)
+    suspend fun realWait(
+        totalMs: Long,
+        stopRequested: () -> Boolean = { false },
+        onTick: (suspend (remainingSeconds: Int, elapsedMs: Long) -> Unit)? = null
+    ) {
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < totalMs) {
+            if (stopRequested()) {
+                throw CancellationException("Annulé par l'utilisateur")
+            }
+            val elapsed = System.currentTimeMillis() - start
+            val remaining = max(0L, ceil((totalMs - elapsed) / 1000.0).toLong()).toInt()
+            onTick?.invoke(remaining, elapsed)
+            delay(800)
         }
-        onTick?.invoke(0)
+        if (stopRequested()) {
+            throw CancellationException("Annulé par l'utilisateur")
+        }
+        onTick?.invoke(0, totalMs)
     }
 
-    fun getRequiredCooldown(profile: String): Long {
+    fun getRequiredVideoCooldown(profile: String): Long {
         return when (profile.lowercase(Locale.ROOT)) {
-            "enterprise" -> ENTERPRISE_COOLDOWN_MS
-            "token" -> TOKEN_COOLDOWN_MS
-            else -> FREE_COOLDOWN_MS
+            "enterprise" -> VIDEO_PAUSE_MS_ENTERPRISE
+            "token" -> VIDEO_PAUSE_MS_TOKEN
+            else -> VIDEO_PAUSE_MS_FREE
         }
     }
 
     suspend fun checkVideoRateLimit(profile: String): Long = mutex.withLock {
-        val cooldown = getRequiredCooldown(profile)
+        val cooldown = getRequiredVideoCooldown(profile)
         if (cooldown == 0L) return 0L
 
         val elapsed = System.currentTimeMillis() - lastVideoTimestamp

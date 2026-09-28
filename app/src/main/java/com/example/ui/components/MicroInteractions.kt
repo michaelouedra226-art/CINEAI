@@ -108,7 +108,7 @@ fun AgnesPrimaryButton(
 
     val gradient = if (enabled) {
         Brush.horizontalGradient(
-            colors = listOf(Color(0xFF7C3AED), Color(0xFF9333EA))
+            colors = listOf(Color(0xFF7C3AED), Color(0xFFDB2777))
         )
     } else {
         Brush.horizontalGradient(

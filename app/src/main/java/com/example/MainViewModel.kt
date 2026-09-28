@@ -49,13 +49,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         usageTracker = usageTracker
     )
 
-    // Écran actuel
+    // Écran actif
     private val _currentScreen = MutableStateFlow(AgnesScreen.IMAGES)
     val currentScreen: StateFlow<AgnesScreen> = _currentScreen.asStateFlow()
 
     private val screenBackStack = mutableListOf(AgnesScreen.IMAGES)
 
-    // Données réactives Room
+    // Room StateFlows
     val allCreations: StateFlow<List<CreationEntity>> = repository.allCreations
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -96,6 +96,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentFilmScenes = MutableStateFlow<List<SceneItem>>(emptyList())
     val currentFilmScenes: StateFlow<List<SceneItem>> = _currentFilmScenes.asStateFlow()
 
+    private var filmStopRequested = false
     private var filmJob: Job? = null
     private var filmTimerJob: Job? = null
 
@@ -104,7 +105,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         listOf(
             ChatMessage(
                 sender = "agnes",
-                text = "Bienvenue dans Agnes Studio. Je suis votre directrice artistique IA. Décrivez-moi une scène ou un concept cinématographique, et je structurerai vos plans et prompts."
+                text = "Agnes Studio connecté au moteur d'IA générative. Renseignez votre clé API dans les Réglages pour démarrer."
             )
         )
     )
@@ -113,14 +114,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSendingChat = MutableStateFlow(false)
     val isSendingChat: StateFlow<Boolean> = _isSendingChat.asStateFlow()
 
-    // Toast notification
+    // Notification toast & modal
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
 
     private val _hasGalleryBadge = MutableStateFlow(false)
     val hasGalleryBadge: StateFlow<Boolean> = _hasGalleryBadge.asStateFlow()
 
-    // Modal Logs
     private val _showLogsModal = MutableStateFlow(false)
     val showLogsModal: StateFlow<Boolean> = _showLogsModal.asStateFlow()
 
@@ -168,9 +168,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun toggleFavorite(id: String, isFav: Boolean) {
+    fun deleteApiKey() {
         viewModelScope.launch {
-            repository.toggleFavorite(id, isFav)
+            repository.deleteSettingsKey()
+            _toastMessage.value = "Clé API supprimée"
+        }
+    }
+
+    fun toggleFavorite(id: String, favorite: Boolean) {
+        viewModelScope.launch {
+            repository.toggleFavorite(id, favorite)
         }
     }
 
@@ -188,9 +195,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Génération d'images
-     */
     fun generateImages(
         prompt: String,
         style: String,
@@ -199,6 +203,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         variations: Int
     ) {
         if (_isImageGenerating.value) return
+        val currentKey = settings.value.apiKey
+        if (currentKey.isBlank()) {
+            _toastMessage.value = "Veuillez configurer votre clé API dans les Réglages."
+            navigateTo(AgnesScreen.SETTINGS)
+            return
+        }
+
         _isImageGenerating.value = true
 
         viewModelScope.launch {
@@ -208,29 +219,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 size = size,
                 ratio = ratio,
                 variations = variations
-            ) { success ->
+            ) { success, errorMsg ->
                 _isImageGenerating.value = false
                 if (success) {
-                    _toastMessage.value = "Nouvelle image prête dans la Galerie"
+                    _toastMessage.value = "Image générée avec succès"
                     _hasGalleryBadge.value = true
                 } else {
-                    _toastMessage.value = "Échec de génération d'image"
+                    _toastMessage.value = errorMsg ?: "Échec de génération d'image"
                 }
             }
         }
     }
 
-    /**
-     * Génération vidéo
-     */
     fun generateVideo(
         prompt: String,
         mode: String,
         startImg: String?,
         durationSeconds: Int,
-        resolution: String
+        resolution: String,
+        numFrames: Int = 121
     ) {
         if (_isVideoGenerating.value) return
+        val currentKey = settings.value.apiKey
+        if (currentKey.isBlank()) {
+            _toastMessage.value = "Veuillez configurer votre clé API dans les Réglages."
+            navigateTo(AgnesScreen.SETTINGS)
+            return
+        }
+
         _isVideoGenerating.value = true
 
         viewModelScope.launch {
@@ -238,31 +254,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 prompt = prompt,
                 startImageUrl = startImg,
                 durationSeconds = durationSeconds,
-                resolution = resolution
-            ) { success ->
+                resolution = resolution,
+                numFrames = numFrames
+            ) { success, errorMsg ->
                 _isVideoGenerating.value = false
                 if (success) {
-                    _toastMessage.value = "Vidéo prête dans la Galerie"
+                    _toastMessage.value = "Vidéo générée avec succès"
                     _hasGalleryBadge.value = true
                 } else {
-                    _toastMessage.value = "Échec ou interruption du rendu vidéo"
+                    _toastMessage.value = errorMsg ?: "Échec de la génération vidéo"
                 }
             }
         }
     }
 
     /**
-     * Génération d'un film complet
+     * Démarrage d'un nouveau film studio réel
      */
-    fun startNewFilm(title: String, prompt: String, style: String, numScenes: Int) {
+    fun startNewFilm(
+        title: String,
+        prompt: String,
+        style: String,
+        requestedDurationSeconds: Double,
+        manualScenes: Int?,
+        startImage: String = ""
+    ) {
         if (_isFilmGenerating.value) return
+        val currentKey = settings.value.apiKey
+        if (currentKey.isBlank()) {
+            _toastMessage.value = "Veuillez configurer votre clé API dans les Réglages."
+            navigateTo(AgnesScreen.SETTINGS)
+            return
+        }
+
         _isFilmGenerating.value = true
-        _filmProgress.value = 10
-        _filmStepText.value = "Préparation du script..."
+        filmStopRequested = false
+        _filmProgress.value = 5
+        _filmStepText.value = "Initialisation du pipeline..."
         _filmElapsedSeconds.value = 0
         _currentFilmScenes.value = emptyList()
 
-        // Démarre le chronomètre
         filmTimerJob?.cancel()
         filmTimerJob = viewModelScope.launch {
             while (isActive && _isFilmGenerating.value) {
@@ -277,11 +308,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 repository.createAndGenerateFilm(
                     filmId = filmId,
                     title = title,
-                    logline = prompt,
                     prompt = prompt,
                     filmStyle = style,
-                    numScenes = numScenes,
-                    startImage = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800",
+                    requestedDuration = requestedDurationSeconds,
+                    manualScenes = manualScenes,
+                    startImage = startImage,
+                    stopRequested = { filmStopRequested },
                     onSceneUpdate = { scenes, progress, stepText ->
                         _currentFilmScenes.value = scenes
                         _filmProgress.value = progress
@@ -290,42 +322,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 _isFilmGenerating.value = false
                 filmTimerJob?.cancel()
-                _toastMessage.value = "Production terminée ! Film disponible en Galerie"
+                _toastMessage.value = "Film achevé avec succès"
                 _hasGalleryBadge.value = true
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 _isFilmGenerating.value = false
                 filmTimerJob?.cancel()
-                _toastMessage.value = "Génération du film interrompue"
+                _toastMessage.value = if (filmStopRequested) "Production annulée" else (e.message ?: "Génération interrompue")
             }
         }
     }
 
     fun cancelFilmGeneration() {
+        filmStopRequested = true
         filmJob?.cancel()
         filmTimerJob?.cancel()
         _isFilmGenerating.value = false
-        _toastMessage.value = "Génération du film annulée"
+        _toastMessage.value = "Génération du film interrompue"
     }
 
-    /**
-     * Chat
-     */
     fun sendChatMessage(text: String) {
         if (text.isBlank() || _isSendingChat.value) return
+        val currentKey = settings.value.apiKey
+        if (currentKey.isBlank()) {
+            _toastMessage.value = "Veuillez configurer votre clé API dans les Réglages."
+            navigateTo(AgnesScreen.SETTINGS)
+            return
+        }
+
         val userMsg = ChatMessage(sender = "user", text = text)
         _chatMessages.value = _chatMessages.value + userMsg
         _isSendingChat.value = true
 
         viewModelScope.launch {
-            val settings = settings.value
-            when (val res = apiClient.sendChatMessage(settings.apiKey, settings.defaultTextModel, text)) {
+            when (val res = apiClient.sendChatMessage(currentKey, text)) {
                 is ApiResponse.Success -> {
-                    val reply = ChatMessage(sender = "agnes", text = res.data)
-                    _chatMessages.value = _chatMessages.value + reply
+                    _chatMessages.value = _chatMessages.value + ChatMessage(sender = "agnes", text = res.data)
+                }
+                is ApiResponse.Error -> {
+                    _chatMessages.value = _chatMessages.value + ChatMessage(sender = "agnes", text = res.message)
                 }
                 else -> {
-                    val reply = ChatMessage(sender = "agnes", text = "Désolé, une erreur est survenue lors de la communication.")
-                    _chatMessages.value = _chatMessages.value + reply
+                    _chatMessages.value = _chatMessages.value + ChatMessage(sender = "agnes", text = "Erreur de communication avec agnes-2.5-flash.")
                 }
             }
             _isSendingChat.value = false

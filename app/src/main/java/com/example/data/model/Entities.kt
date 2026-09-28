@@ -36,9 +36,11 @@ data class FilmEntity(
     val status: String, // "processing" | "partial" | "done" | "failed"
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val numScenes: Int = 3,
+    val requestedDuration: Double = 30.0,
+    val duration: Double = 30.0,
+    val numScenes: Int = 5,
     val framesPerScene: Int = 121,
-    val durationPerScene: Int = 5,
+    val durationPerScene: Double = 5.042,
     val actualDuration: Int = 0,
     val filmStyle: String = "Cinématique",
     val scenesJson: String = "[]",
@@ -58,11 +60,11 @@ data class UsageEntity(
 @Entity(tableName = "settings")
 data class SettingsEntity(
     @PrimaryKey val id: String = "main",
-    val apiKey: String = "agnes_live_key_demo",
+    val apiKey: String = "",
     val rateLimitProfile: String = "free", // "free" | "token" | "enterprise"
     val defaultImageModel: String = "agnes-image-2.1-flash",
     val defaultVideoModel: String = "agnes-video-v2.0",
-    val defaultTextModel: String = "agnes-2.0-flash",
+    val defaultTextModel: String = "agnes-2.5-flash",
     val defaultImageSize: String = "2K",
     val defaultImageRatio: String = "9:16",
     val autoDownload: Boolean = false,

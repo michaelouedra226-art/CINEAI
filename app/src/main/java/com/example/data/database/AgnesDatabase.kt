@@ -23,7 +23,7 @@ import com.example.data.model.UsageEntity
         SettingsEntity::class,
         QueueItemEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class AgnesDatabase : RoomDatabase() {
@@ -42,8 +42,11 @@ abstract class AgnesDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AgnesDatabase::class.java,
-                    "agnes_studio_v1"
-                ).fallbackToDestructiveMigration().build()
+                    "agnes_studio_v2.db"
+                )
+                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+                    .build()
                 INSTANCE = instance
                 instance
             }

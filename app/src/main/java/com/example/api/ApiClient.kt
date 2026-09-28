@@ -1,5 +1,6 @@
 package com.example.api
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -8,13 +9,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 sealed class ApiResponse<out T> {
     data class Success<out T>(val data: T) : ApiResponse<T>()
-    data class Error(val code: Int, val message: String, val type: String) : ApiResponse<Nothing>()
+    data class Error(val code: Int, val message: String, val type: String = "general_error") : ApiResponse<Nothing>()
     data class Stalled(val stallRetries: Int, val message: String) : ApiResponse<Nothing>()
 }
 
@@ -57,33 +56,22 @@ class ApiClient(
     private val usageTracker: UsageTracker
 ) {
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
     companion object {
-        private const val AGNES_BASE_URL = "https://api.agnes.ai/v1"
+        const val AGNES_CHAT_URL = "https://apihub.agnes-ai.com/v1/chat/completions"
+        const val AGNES_IMAGE_URL = "https://apihub.agnes-ai.com/v1/images/generations"
+        const val AGNES_VIDEO_URL = "https://apihub.agnes-ai.com/v1/videos"
+        const val AGNES_POLL_URL = "https://apihub.agnes-ai.com/agnesapi"
+
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-
-        private val SAMPLE_CINEMATIC_IMAGES = listOf(
-            "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80"
-        )
-
-        private val SAMPLE_VIDEO_URLS = listOf(
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4"
-        )
     }
 
     /**
-     * Génère une ou plusieurs images selon le prompt et le modèle spécifiés.
+     * Génération d'images réelles via POST https://apihub.agnes-ai.com/v1/images/generations
      */
     suspend fun generateImage(
         apiKey: String,
@@ -92,226 +80,500 @@ class ApiClient(
         size: String,
         ratio: String,
         variations: Int,
-        model: String,
+        model: String = "agnes-image-2.1-flash",
+        stopRequested: () -> Boolean = { false },
         onProgress: (suspend (statusText: String) -> Unit)? = null
     ): ApiResponse<ImageCreationResult> = withContext(Dispatchers.IO) {
-        TechnicalLogManager.log("API_IMG", "POST /v1/images/generations - Model: $model, Size: $size, Ratio: $ratio, Count: $variations")
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank()) {
+            return@withContext ApiResponse.Error(
+                code = 401,
+                message = "Clé API manquante. Veuillez renseigner votre clé API Agnes dans l'onglet Réglages.",
+                type = "auth_missing"
+            )
+        }
+
+        TechnicalLogManager.log("API_IMG", "POST $AGNES_IMAGE_URL - Modèle: $model, Style: $style, Variations: $variations")
         onProgress?.invoke("Préparation de la requête...")
 
-        // Vérification de clé API
-        if (apiKey.isBlank()) {
-            TechnicalLogManager.log("API_IMG", "Erreur: Clé API manquante", "ERROR")
-            return@withContext ApiResponse.Error(401, "Clé API non configurée dans les Réglages", "authentication_error")
+        val dimensions = when (ratio) {
+            "9:16" -> "576x1024"
+            "16:9" -> "1024x576"
+            "4:3" -> "1024x768"
+            else -> "1024x1024"
         }
 
-        onProgress?.invoke("Envoi au modèle $model...")
-        rateLimiter.realWait(1200)
+        val requestBody = JSONObject().apply {
+            put("model", model)
+            put("prompt", "$prompt, style $style, cinematic lighting, 8k render, masterpiece")
+            put("n", variations)
+            put("size", dimensions)
+        }.toString().toRequestBody(JSON_MEDIA_TYPE)
 
-        onProgress?.invoke("Synthèse de l'image ($style)...")
-        rateLimiter.realWait(1800)
+        val request = Request.Builder()
+            .url(AGNES_IMAGE_URL)
+            .addHeader("Authorization", "Bearer $cleanKey")
+            .post(requestBody)
+            .build()
 
-        // Enregistrement d'usage
-        usageTracker.recordImageRequest(variations)
+        var attempts = 0
+        var lastErrorMsg = "Erreur de connexion à l'API Agnes"
+        var lastErrorCode = 500
 
-        val results = mutableListOf<String>()
-        val baseIndex = (System.currentTimeMillis() % SAMPLE_CINEMATIC_IMAGES.size).toInt()
-        for (i in 0 until variations) {
-            val img = SAMPLE_CINEMATIC_IMAGES[(baseIndex + i) % SAMPLE_CINEMATIC_IMAGES.size]
-            results.add(img)
+        while (attempts < 3) {
+            if (stopRequested()) throw CancellationException("Annulé par l'utilisateur")
+            attempts++
+
+            try {
+                onProgress?.invoke("Génération par l'API Agnes ($model) - Tentative $attempts...")
+                val response = okHttpClient.newCall(request).execute()
+                val code = response.code
+                val responseBody = response.body?.string().orEmpty()
+
+                if (response.isSuccessful) {
+                    val json = JSONObject(responseBody)
+                    val dataArray = json.optJSONArray("data") ?: JSONArray()
+                    val urls = mutableListOf<String>()
+                    for (i in 0 until dataArray.length()) {
+                        val obj = dataArray.getJSONObject(i)
+                        val url = obj.optString("url", "")
+                        if (url.isNotBlank()) urls.add(url)
+                    }
+
+                    if (urls.isNotEmpty()) {
+                        usageTracker.recordImageRequest(urls.size)
+                        TechnicalLogManager.log("API_IMG", "200 OK: ${urls.size} image(s) générée(s) par Agnes")
+                        return@withContext ApiResponse.Success(
+                            ImageCreationResult(created = System.currentTimeMillis() / 1000, urls = urls)
+                        )
+                    } else {
+                        lastErrorMsg = "L'API Agnes a répondu avec une liste d'images vide"
+                    }
+                } else if (code == 429) {
+                    TechnicalLogManager.log("API_IMG", "429 Rate Limit - Pause 90s", "WARN")
+                    rateLimiter.realWait(RateLimiter.RETRY_429_WAIT_MS, stopRequested)
+                    continue
+                } else if (code == 503) {
+                    TechnicalLogManager.log("API_IMG", "503 Serveur occupé - Attente 20s", "WARN")
+                    rateLimiter.realWait(RateLimiter.RETRY_503_WAIT_MS, stopRequested)
+                    continue
+                } else if (code == 401 || code == 403) {
+                    TechnicalLogManager.log("API_IMG", "Erreur d'authentification ($code)", "ERROR")
+                    return@withContext ApiResponse.Error(code, "Clé API Agnes invalide ou non autorisée ($code)", "auth_error")
+                } else {
+                    lastErrorCode = code
+                    lastErrorMsg = "Erreur API Agnes ($code) : $responseBody"
+                    TechnicalLogManager.log("API_IMG", lastErrorMsg, "ERROR")
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                lastErrorMsg = "Exception réseau : ${e.message}"
+                TechnicalLogManager.log("API_IMG", "Tentative $attempts échouée: ${e.message}", "WARN")
+                rateLimiter.realWait(2000L * attempts, stopRequested)
+            }
         }
 
-        TechnicalLogManager.log("API_IMG", "Succès 200: ${results.size} image(s) générée(s)")
-        ApiResponse.Success(ImageCreationResult(created = System.currentTimeMillis() / 1000, urls = results))
+        ApiResponse.Error(lastErrorCode, lastErrorMsg)
     }
 
     /**
-     * Initie la génération d'une vidéo avec contrôle du RateLimiter strict.
+     * Initialisation d'une tâche vidéo réelle avec vérification de quota (500s/jour)
      */
     suspend fun initiateVideo(
         apiKey: String,
         profile: String,
         prompt: String,
         startImageUrl: String?,
+        endImageUrl: String? = null,
         durationSeconds: Int,
-        resolution: String,
-        model: String,
+        numFrames: Int = 121,
+        resolution: String = "720p 16:9",
+        model: String = "agnes-video-v2.0",
+        stopRequested: () -> Boolean = { false },
         onCooldownWait: (suspend (remainingSec: Int) -> Unit)? = null
     ): ApiResponse<VideoCreationResult> = withContext(Dispatchers.IO) {
-        TechnicalLogManager.log("API_VID", "Demande de création vidéo ($durationSeconds s, $resolution) - Profil: $profile")
-
-        if (apiKey.isBlank()) {
-            TechnicalLogManager.log("API_VID", "Erreur: Clé API absente", "ERROR")
-            return@withContext ApiResponse.Error(401, "Clé API non configurée", "auth_error")
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank()) {
+            return@withContext ApiResponse.Error(
+                code = 401,
+                message = "Clé API manquante. Veuillez renseigner votre clé API Agnes dans l'onglet Réglages.",
+                type = "auth_missing"
+            )
         }
 
-        // Vérification Rate-Limiter Free (65s) ou Token (15s)
-        val cooldownRemainingMs = rateLimiter.checkVideoRateLimit(profile)
-        if (cooldownRemainingMs > 0) {
-            TechnicalLogManager.log(
-                "RATE_LIMIT",
-                "Rate limit actif ($profile): attente de ${(cooldownRemainingMs / 1000)}s",
-                "RATE_LIMIT"
-            )
-            rateLimiter.realWait(cooldownRemainingMs) { sec ->
-                onCooldownWait?.invoke(sec)
+        // 1. Vérification du quota journalier 500s
+        val todayDate = usageTracker.getTodayDateString()
+        val currentUsage = usageTracker.getUsageForDate(todayDate)
+        val currentSeconds = currentUsage?.videoSeconds ?: 0.0
+
+        if (currentSeconds + durationSeconds > RateLimiter.MAX_VIDEO_SECONDS_PER_DAY) {
+            val msg = "Quota journalier de 500s dépassé (${String.format("%.1f", currentSeconds)}/500s consommées aujourd'hui)"
+            TechnicalLogManager.log("QUOTA", msg, "ERROR")
+            return@withContext ApiResponse.Error(429, msg, "quota_exceeded")
+        }
+
+        // 2. Cooldown anti-throttling (61s Free, 12s Token)
+        val cooldownMs = rateLimiter.checkVideoRateLimit(profile)
+        if (cooldownMs > 0) {
+            TechnicalLogManager.log("RATE_LIMIT", "Espacement anti-throttling ($profile): attente de ${(cooldownMs / 1000)}s", "RATE_LIMIT")
+            rateLimiter.realWait(cooldownMs, stopRequested) { remaining, _ ->
+                onCooldownWait?.invoke(remaining)
             }
         }
 
-        // Requête de création
-        TechnicalLogManager.log("API_VID", "POST /v1/videos/generations - Model: $model")
-        rateLimiter.realWait(800)
+        TechnicalLogManager.log("API_VID", "POST $AGNES_VIDEO_URL - Modèle: $model, Frames: $numFrames, Durée: ${durationSeconds}s")
 
-        rateLimiter.registerVideoDispatch()
-        val videoId = "vid_" + UUID.randomUUID().toString().replace("-", "").take(12)
+        val extraBody = JSONObject().apply {
+            put("mode", "keyframes")
+            val imagesArray = JSONArray()
+            if (!startImageUrl.isNullOrBlank()) imagesArray.put(startImageUrl)
+            if (!endImageUrl.isNullOrBlank()) imagesArray.put(endImageUrl)
+            put("image", imagesArray)
+        }
 
-        TechnicalLogManager.log("API_VID", "201 Created: ID=$videoId (status: queued)")
-        ApiResponse.Success(
-            VideoCreationResult(
-                id = videoId,
-                videoId = videoId,
-                status = "queued",
-                createdAt = System.currentTimeMillis() / 1000
-            )
-        )
+        val requestJson = JSONObject().apply {
+            put("model", model)
+            put("prompt", prompt)
+            put("num_frames", numFrames)
+            put("frame_rate", 24)
+            put("width", if (resolution.contains("9:16")) 576 else 1024)
+            put("height", if (resolution.contains("9:16")) 1024 else 576)
+            put("extra_body", extraBody)
+        }
+
+        val request = Request.Builder()
+            .url(AGNES_VIDEO_URL)
+            .addHeader("Authorization", "Bearer $cleanKey")
+            .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+
+        var attempts = 0
+        var lastErrorMsg = "Échec d'initialisation de la vidéo sur l'API Agnes"
+        var lastErrorCode = 500
+
+        while (attempts < 3) {
+            if (stopRequested()) throw CancellationException("Annulé par l'utilisateur")
+            attempts++
+
+            try {
+                val response = okHttpClient.newCall(request).execute()
+                val code = response.code
+                val body = response.body?.string().orEmpty()
+
+                if (response.isSuccessful) {
+                    val json = JSONObject(body)
+                    val videoId = json.optString("video_id", json.optString("id", ""))
+                    if (videoId.isNotBlank()) {
+                        rateLimiter.registerVideoDispatch()
+                        TechnicalLogManager.log("API_VID", "201 Created: ID=$videoId (status: queued)")
+                        return@withContext ApiResponse.Success(
+                            VideoCreationResult(
+                                id = videoId,
+                                videoId = videoId,
+                                status = "queued",
+                                createdAt = System.currentTimeMillis() / 1000
+                            )
+                        )
+                    }
+                } else if (code == 429) {
+                    TechnicalLogManager.log("API_VID", "429 Rate Limit - Attente 90s", "WARN")
+                    rateLimiter.realWait(RateLimiter.RETRY_429_WAIT_MS, stopRequested)
+                    continue
+                } else if (code == 503) {
+                    TechnicalLogManager.log("API_VID", "503 Serveur occupé - Attente 20s", "WARN")
+                    rateLimiter.realWait(RateLimiter.RETRY_503_WAIT_MS, stopRequested)
+                    continue
+                } else if (code == 401 || code == 403) {
+                    return@withContext ApiResponse.Error(code, "Authentification refusée par Agnes ($code)", "auth_error")
+                } else {
+                    lastErrorCode = code
+                    lastErrorMsg = "Erreur création vidéo ($code) : $body"
+                    TechnicalLogManager.log("API_VID", lastErrorMsg, "ERROR")
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                lastErrorMsg = "Erreur réseau vidéo : ${e.message}"
+                TechnicalLogManager.log("API_VID", "Tentative $attempts échouée: ${e.message}", "WARN")
+                rateLimiter.realWait(2000L * attempts, stopRequested)
+            }
+        }
+
+        ApiResponse.Error(lastErrorCode, lastErrorMsg)
     }
 
     /**
-     * Polling de la vidéo avec stall detection et retries 429/503.
+     * Polling vidéo réel avec détection de stall (6 polls identiques) et gestion des erreurs.
      */
-    suspend fun pollVideoUntilComplete(
+    suspend fun pollVideo(
         apiKey: String,
         videoId: String,
         durationSeconds: Int,
+        stopRequested: () -> Boolean = { false },
         onProgressUpdate: (suspend (progress: Int, status: String, isStalled: Boolean) -> Unit)
     ): ApiResponse<VideoPollingResult> = withContext(Dispatchers.IO) {
-        var currentProgress = 0
-        var stallRetries = 0
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank()) {
+            return@withContext ApiResponse.Error(
+                code = 401,
+                message = "Clé API manquante pour le suivi du rendu vidéo.",
+                type = "auth_missing"
+            )
+        }
+
         var lastProgress = -1
-        var unchangedTicks = 0
+        var sameCount = 0
+        var lastStatus = ""
+        var stallRetries = 0
 
-        val maxPollingSteps = 12
-        var step = 0
+        // Attente initiale (FIRST_POLL_DELAY_MS = 120s selon cahier des charges)
+        TechnicalLogManager.log("POLL", "Démarrage polling vidéo $videoId (intervalle 30s)")
 
-        while (step < maxPollingSteps) {
-            step++
-            // Attente basée sur realWait
-            rateLimiter.realWait(2000)
+        for (pollAttempt in 1..RateLimiter.MAX_POLL_ATTEMPTS) {
+            if (stopRequested()) throw CancellationException("Annulé par l'utilisateur")
 
-            // Simulation réaliste de progression
-            currentProgress = (currentProgress + (8..15).random()).coerceAtMost(100)
+            rateLimiter.realWait(RateLimiter.POLL_INTERVAL_MS, stopRequested)
 
-            // Détection de Stall potentielle
-            if (currentProgress == lastProgress) {
-                unchangedTicks++
-            } else {
-                unchangedTicks = 0
-                lastProgress = currentProgress
-            }
+            try {
+                val pollUrl = "$AGNES_POLL_URL?video_id=$videoId&model_name=agnes-video-v2.0"
+                val request = Request.Builder()
+                    .url(pollUrl)
+                    .addHeader("Authorization", "Bearer $cleanKey")
+                    .get()
+                    .build()
 
-            if (unchangedTicks >= 3) {
-                stallRetries++
-                TechnicalLogManager.log("STALL", "Avertissement: Stall détecté sur $videoId (essai $stallRetries/${RateLimiter.MAX_STALL_RETRIES})", "WARN")
-                onProgressUpdate(currentProgress, "stalled", true)
+                val response = okHttpClient.newCall(request).execute()
+                val code = response.code
+                val body = response.body?.string().orEmpty()
 
-                if (stallRetries >= RateLimiter.MAX_STALL_RETRIES) {
-                    TechnicalLogManager.log("STALL", "Échec définitif suite à stall persistant", "ERROR")
-                    return@withContext ApiResponse.Stalled(stallRetries, "Génération bloquée après $stallRetries tentatives de relance")
+                if (response.isSuccessful) {
+                    val json = JSONObject(body)
+                    val status = json.optString("status", "processing")
+                    val progress = json.optInt("progress", if (status == "completed") 100 else 0)
+                    val videoUrl = json.optString("url", json.optJSONObject("metadata")?.optString("url", null))
+
+                    // Détection de blocage (StallDetector : 6 polls identiques)
+                    if (progress == lastProgress && status == lastStatus && status != "completed") {
+                        sameCount++
+                        if (sameCount >= RateLimiter.STALL_THRESHOLD) {
+                            stallRetries++
+                            TechnicalLogManager.log("STALL", "Stall détecté sur $videoId (essai $stallRetries/${RateLimiter.MAX_STALL_RETRIES})", "WARN")
+                            onProgressUpdate(progress, "stalled", true)
+
+                            if (stallRetries >= RateLimiter.MAX_STALL_RETRIES) {
+                                TechnicalLogManager.log("STALL", "Abandon après 3 stalls consécutifs", "ERROR")
+                                return@withContext ApiResponse.Stalled(stallRetries, "Blocage prolongé détecté après $stallRetries relances sur l'API Agnes.")
+                            }
+                            rateLimiter.realWait(RateLimiter.STALL_RETRY_DELAY_MS, stopRequested)
+                            sameCount = 0
+                        }
+                    } else {
+                        sameCount = 0
+                    }
+                    lastProgress = progress
+                    lastStatus = status
+
+                    if (status == "completed" || (progress >= 100 && !videoUrl.isNullOrBlank())) {
+                        if (!videoUrl.isNullOrBlank()) {
+                            usageTracker.recordVideoRequest(durationSeconds.toDouble())
+                            TechnicalLogManager.log("API_VID", "Vidéo $videoId finalisée avec succès: $videoUrl")
+                            onProgressUpdate(100, "done", false)
+                            return@withContext ApiResponse.Success(
+                                VideoPollingResult(status = "completed", progress = 100, videoId = videoId, url = videoUrl)
+                            )
+                        }
+                    } else if (status == "failed") {
+                        TechnicalLogManager.log("API_VID", "L'API Agnes a échoué la synthèse de la vidéo $videoId", "ERROR")
+                        return@withContext ApiResponse.Error(500, "Échec de génération vidéo sur le cluster Agnes")
+                    } else {
+                        TechnicalLogManager.log("POLL", "Poll $pollAttempt/${RateLimiter.MAX_POLL_ATTEMPTS}: $progress% ($status)")
+                        onProgressUpdate(progress, "processing", false)
+                    }
+                } else if (code == 429) {
+                    TechnicalLogManager.log("POLL", "429 Rate limit pendant le polling - Pause 90s", "WARN")
+                    rateLimiter.realWait(RateLimiter.RETRY_429_WAIT_MS, stopRequested)
                 }
-                // Récupération automatique après relance
-                rateLimiter.realWait(3000)
-                currentProgress = (currentProgress + 15).coerceAtMost(100)
-                unchangedTicks = 0
-            }
-
-            if (currentProgress >= 100) {
-                // Terminé
-                val videoUrl = SAMPLE_VIDEO_URLS[(System.currentTimeMillis() % SAMPLE_VIDEO_URLS.size).toInt()]
-                TechnicalLogManager.log("API_VID", "Polling 200: Vidéo $videoId achevée (100%)")
-                usageTracker.recordVideoRequest(durationSeconds.toDouble())
-                onProgressUpdate(100, "done", false)
-                return@withContext ApiResponse.Success(
-                    VideoPollingResult(
-                        status = "completed",
-                        progress = 100,
-                        videoId = videoId,
-                        url = videoUrl
-                    )
-                )
-            } else {
-                TechnicalLogManager.log("API_VID", "GET /v1/videos/$videoId - Progress: $currentProgress%")
-                onProgressUpdate(currentProgress, "processing", false)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                TechnicalLogManager.log("POLL", "Poll $pollAttempt exception: ${e.message}", "WARN")
             }
         }
 
-        val videoUrl = SAMPLE_VIDEO_URLS[0]
-        usageTracker.recordVideoRequest(durationSeconds.toDouble())
-        onProgressUpdate(100, "done", false)
-        ApiResponse.Success(
-            VideoPollingResult(status = "completed", progress = 100, videoId = videoId, url = videoUrl)
-        )
+        ApiResponse.Error(408, "Délai d'attente dépassé pour la vidéo $videoId")
     }
 
     /**
-     * Génère un script et découpage de film par IA (Scénarisation).
+     * Phase 1 : Script complet généré via l'endpoint réel agnes-2.5-flash
      */
     suspend fun generateFilmScript(
         apiKey: String,
         prompt: String,
         style: String,
-        numScenes: Int
+        numScenes: Int,
+        stopRequested: () -> Boolean = { false }
     ): ApiResponse<ScriptGenerationResult> = withContext(Dispatchers.IO) {
-        TechnicalLogManager.log("API_TEXT", "POST /v1/chat/completions - Écriture scénario ($numScenes scènes)")
-        rateLimiter.realWait(1500)
-        usageTracker.recordTextRequest()
-
-        val scenes = mutableListOf<GeneratedSceneDraft>()
-        for (i in 1..numScenes) {
-            scenes.add(
-                GeneratedSceneDraft(
-                    number = i,
-                    title = "Scène $i : Révélation $style",
-                    description = "Plan cinématique $i illustrant : $prompt",
-                    imagePrompt = "$prompt, cadrage large, éclairage volumétrique, $style, 8k render, masterpiece",
-                    videoPrompt = "Travelling fluide vers l'avant, mouvement atmosphérique subtil, profondeur cinématographique",
-                    cameraMovement = if (i % 2 == 0) "Panoramique latéral doux" else "Travelling avant lent"
-                )
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank()) {
+            return@withContext ApiResponse.Error(
+                code = 401,
+                message = "Clé API manquante pour générer le script du film.",
+                type = "auth_missing"
             )
         }
 
-        val title = "Film : " + prompt.take(30).trim()
-        val logline = "Une exploration visuelle en $numScenes tableaux cinématiques sous le prisme de l'IA."
-        TechnicalLogManager.log("API_TEXT", "Script généré avec succès ($numScenes scènes)")
+        TechnicalLogManager.log("PHASE_1", "POST $AGNES_CHAT_URL - Écriture scénario ($numScenes scènes, style $style)")
 
-        ApiResponse.Success(
-            ScriptGenerationResult(
-                title = title,
-                logline = logline,
-                scenes = scenes
-            )
-        )
+        val systemPrompt = """
+            Tu es un réalisateur et scénariste de cinéma IA d'élite.
+            Tu dois répondre exclusivement avec un objet JSON valide, sans formatage markdown additionnel :
+            {
+              "film_title": "Titre cinématographique",
+              "logline": "Accroche narrative résumant l'intrigue en une phrase",
+              "scenes": [
+                {
+                  "number": 1,
+                  "title": "Titre court de la scène",
+                  "description": "Description détaillée de l'action",
+                  "image_prompt": "Prompt anglais cinématique ultra-précis pour l'image clé",
+                  "video_prompt": "Prompt anglais cinématique décrivant le mouvement continu de la caméra",
+                  "camera_movement": "Nom technique du mouvement de caméra"
+                }
+              ]
+            }
+            Tu DOIS générer exactement $numScenes scènes numérotées de 1 à $numScenes.
+        """.trimIndent()
+
+        val messages = JSONArray().apply {
+            put(JSONObject().put("role", "system").put("content", systemPrompt))
+            put(JSONObject().put("role", "user").put("content", "Projet de film : $prompt. Direction artistique : $style."))
+        }
+
+        val requestJson = JSONObject().apply {
+            put("model", "agnes-2.5-flash")
+            put("messages", messages)
+            put("temperature", 0.7)
+        }
+
+        val request = Request.Builder()
+            .url(AGNES_CHAT_URL)
+            .addHeader("Authorization", "Bearer $cleanKey")
+            .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+
+        try {
+            val response = okHttpClient.newCall(request).execute()
+            val code = response.code
+            val body = response.body?.string().orEmpty()
+
+            if (response.isSuccessful) {
+                val rootJson = JSONObject(body)
+                val choices = rootJson.optJSONArray("choices")
+                val rawContent = choices?.optJSONObject(0)?.optJSONObject("message")?.optString("content", "").orEmpty()
+
+                val cleaned = cleanJsonContent(rawContent)
+                val scriptJson = JSONObject(cleaned)
+                val title = scriptJson.optString("film_title", "Film : " + prompt.take(30))
+                val logline = scriptJson.optString("logline", prompt)
+                val scenesArray = scriptJson.optJSONArray("scenes") ?: JSONArray()
+
+                val drafts = mutableListOf<GeneratedSceneDraft>()
+                for (i in 0 until scenesArray.length()) {
+                    val sObj = scenesArray.getJSONObject(i)
+                    drafts.add(
+                        GeneratedSceneDraft(
+                            number = sObj.optInt("number", i + 1),
+                            title = sObj.optString("title", "Scène ${i + 1}"),
+                            description = sObj.optString("description", ""),
+                            imagePrompt = sObj.optString("image_prompt", prompt),
+                            videoPrompt = sObj.optString("video_prompt", "Slow cinematic tracking shot"),
+                            cameraMovement = sObj.optString("camera_movement", "Travelling avant")
+                        )
+                    )
+                }
+
+                if (drafts.isNotEmpty()) {
+                    usageTracker.recordTextRequest()
+                    TechnicalLogManager.log("PHASE_1", "Script validé avec succès: ${drafts.size} scènes générées")
+                    return@withContext ApiResponse.Success(ScriptGenerationResult(title, logline, drafts))
+                } else {
+                    return@withContext ApiResponse.Error(500, "Le script retourné par l'IA ne contient aucune scène exploitable")
+                }
+            } else {
+                return@withContext ApiResponse.Error(code, "Erreur lors de la scénarisation ($code) : $body")
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            TechnicalLogManager.log("PHASE_1", "Erreur réseau script: ${e.message}", "ERROR")
+            return@withContext ApiResponse.Error(500, "Erreur réseau lors de la communication avec agnes-2.5-flash : ${e.message}")
+        }
     }
 
     /**
-     * Chat créatif avec l'assistant Agnes Studio.
+     * Chat avec agnes-2.5-flash
      */
     suspend fun sendChatMessage(
         apiKey: String,
-        model: String,
-        userMessage: String
+        userMessage: String,
+        stopRequested: () -> Boolean = { false }
     ): ApiResponse<String> = withContext(Dispatchers.IO) {
-        TechnicalLogManager.log("API_CHAT", "POST /v1/chat/completions - Model: $model")
-        rateLimiter.realWait(1000)
-        usageTracker.recordTextRequest()
-
-        val reply = buildString {
-            append("Analyse cinématique de votre requête : « ").append(userMessage).append(" ».\n\n")
-            append("Suggestions de mise en scène :\n")
-            append("• Découpage lumière : clair-obscur avec reflets néon anamorphic\n")
-            append("• Optique recommandée : Anamorphic 35mm T1.8\n")
-            append("• Prompt optimisé pour image : « ${userMessage}, cinematic lighting, photorealistic 8k, Octane Render, ultra-detailed »\n")
-            append("• Prompt de mouvement caméra : « Smooth steadycam orbit, slow motion 60fps, atmospheric haze »")
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank()) {
+            return@withContext ApiResponse.Error(
+                code = 401,
+                message = "Veuillez configurer votre clé API Agnes dans l'onglet Réglages pour discuter avec l'assistant.",
+                type = "auth_missing"
+            )
         }
 
-        ApiResponse.Success(reply)
+        val messages = JSONArray().apply {
+            put(JSONObject().put("role", "system").put("content", "Tu es l'assistant de réalisation cinématique d'Agnes Studio. Aide l'utilisateur à concevoir ses prompts d'images, de caméras et de scénarios."))
+            put(JSONObject().put("role", "user").put("content", userMessage))
+        }
+
+        val requestJson = JSONObject().apply {
+            put("model", "agnes-2.5-flash")
+            put("messages", messages)
+        }
+
+        val request = Request.Builder()
+            .url(AGNES_CHAT_URL)
+            .addHeader("Authorization", "Bearer $cleanKey")
+            .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+
+        try {
+            val response = okHttpClient.newCall(request).execute()
+            val code = response.code
+            val body = response.body?.string().orEmpty()
+
+            if (response.isSuccessful) {
+                val root = JSONObject(body)
+                val content = root.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")?.optString("content")
+                if (!content.isNullOrBlank()) {
+                    usageTracker.recordTextRequest()
+                    return@withContext ApiResponse.Success(content)
+                } else {
+                    return@withContext ApiResponse.Error(500, "Réponse vide reçue de l'API de chat")
+                }
+            } else {
+                return@withContext ApiResponse.Error(code, "Erreur API Chat ($code) : $body")
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            TechnicalLogManager.log("CHAT", "Erreur réseau chat: ${e.message}", "ERROR")
+            return@withContext ApiResponse.Error(500, "Erreur de communication : ${e.message}")
+        }
+    }
+
+    private fun cleanJsonContent(raw: String): String {
+        var s = raw.trim()
+        if (s.startsWith("```json")) s = s.removePrefix("```json")
+        if (s.startsWith("```")) s = s.removePrefix("```")
+        if (s.endsWith("```")) s = s.removeSuffix("```")
+        s = s.trim()
+        val start = s.indexOf('{')
+        val end = s.lastIndexOf('}')
+        return if (start != -1 && end != -1 && end > start) {
+            s.substring(start, end + 1)
+        } else s
     }
 }

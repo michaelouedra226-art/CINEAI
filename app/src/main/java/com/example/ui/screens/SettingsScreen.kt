@@ -21,6 +21,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,9 +38,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.api.RateLimiter
 import com.example.data.model.SettingsEntity
 import com.example.data.model.UsageEntity
-import com.example.ui.components.AgnesPrimaryButton
+import com.example.ui.components.AgnesShimmerProgressBar
 import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
@@ -48,24 +51,24 @@ fun SettingsScreen(
     settings: SettingsEntity,
     todayUsage: UsageEntity?,
     onSaveSettings: (SettingsEntity) -> Unit,
+    onDeleteApiKey: () -> Unit,
     onOpenLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var apiKey by remember(settings.apiKey) { mutableStateOf(settings.apiKey) }
     var rateLimitProfile by remember(settings.rateLimitProfile) { mutableStateOf(settings.rateLimitProfile) }
-    var defaultImageModel by remember(settings.defaultImageModel) { mutableStateOf(settings.defaultImageModel) }
-    var defaultVideoModel by remember(settings.defaultVideoModel) { mutableStateOf(settings.defaultVideoModel) }
-    var defaultTextModel by remember(settings.defaultTextModel) { mutableStateOf(settings.defaultTextModel) }
+    var autoDownload by remember(settings.autoDownload) { mutableStateOf(settings.autoDownload) }
+    var showTechLog by remember(settings.showTechnicalLog) { mutableStateOf(settings.showTechnicalLog) }
 
-    val imageModels = listOf("agnes-image-2.1-flash", "agnes-image-2.0-pro")
-    val videoModels = listOf("agnes-video-v2.0", "agnes-video-v1.5-fast")
-    val textModels = listOf("agnes-2.0-flash", "agnes-2.0-pro")
+    val usage = todayUsage ?: UsageEntity(date = "Aujourd'hui")
+    val videoQuotaMax = RateLimiter.MAX_VIDEO_SECONDS_PER_DAY
+    val videoQuotaFraction = (usage.videoSeconds / videoQuotaMax).toFloat().coerceIn(0f, 1f)
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0C0C11))
+            .background(Color(0xFF0A0A0F))
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
@@ -78,8 +81,8 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Clé API
-        Text(text = "Clé API", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        // Clé API (saisie, sauvegarde, suppression)
+        Text(text = "Clé API Agnes", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.height(6.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -91,10 +94,10 @@ fun SettingsScreen(
                 modifier = Modifier
                     .weight(1f)
                     .height(52.dp),
-                placeholder = { Text("Entrez votre clé API Agnes...", color = Color(0xFF555566)) },
+                placeholder = { Text("Entrez votre clé API...", color = Color(0xFF555566), fontSize = 13.sp) },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFF14141C),
-                    unfocusedContainerColor = Color(0xFF14141C),
+                    focusedContainerColor = Color(0xFF13131A),
+                    unfocusedContainerColor = Color(0xFF13131A),
                     focusedBorderColor = Color(0xFF8B5CF6),
                     unfocusedBorderColor = Color(0xFF282836),
                     focusedTextColor = Color.White,
@@ -111,33 +114,42 @@ fun SettingsScreen(
                     .background(Color(0xFF7C3AED))
                     .clickable {
                         triggerHapticFeedback(context)
-                        onSaveSettings(
-                            settings.copy(
-                                apiKey = apiKey,
-                                rateLimitProfile = rateLimitProfile,
-                                defaultImageModel = defaultImageModel,
-                                defaultVideoModel = defaultVideoModel,
-                                defaultTextModel = defaultTextModel
-                            )
-                        )
+                        onSaveSettings(settings.copy(apiKey = apiKey.trim()))
                     }
                     .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(text = "Enregistrer", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
+            if (settings.apiKey.isNotBlank()) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF2B1616))
+                        .clickable {
+                            triggerHapticFeedback(context)
+                            apiKey = ""
+                            onDeleteApiKey()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AgnesSvgIcon(icon = AgnesIcon.TRASH, tint = Color(0xFFEF4444), size = 18.dp)
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.height(22.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // Profil de rate-limit : Free / Token Plan / Enterprise
+        // Profil de rate-limit
         Text(text = "Profil de rate-limit", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         listOf(
-            "free" to "Free (Cooldown vidéo 65s)",
-            "token" to "Token Plan (Cooldown vidéo 15s)",
-            "enterprise" to "Enterprise (Illimité, 0s)"
+            "free" to "Free (Pause 61s vidéo obligatoire, 1 RPM)",
+            "token" to "Token Plan (Pause 12s vidéo, 5 RPM)",
+            "enterprise" to "Enterprise (Illimité, 0s pause)"
         ).forEach { (profile, label) ->
             val isSelected = rateLimitProfile == profile
             Row(
@@ -157,10 +169,7 @@ fun SettingsScreen(
                         rateLimitProfile = profile
                         onSaveSettings(settings.copy(rateLimitProfile = profile))
                     },
-                    colors = RadioButtonDefaults.colors(
-                        selectedColor = Color(0xFF8B5CF6),
-                        unselectedColor = Color(0xFF555566)
-                    )
+                    colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF8B5CF6), unselectedColor = Color(0xFF555566))
                 )
                 Text(
                     text = label,
@@ -173,120 +182,154 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Modèles par défaut
-        Text(text = "Modèles par défaut", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        // Modèles par défaut vérifiés
+        Text(text = "Modèles par défaut (Endpoints vérifiés)", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF13131A))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Texte & Script :", color = Color(0xFFCCCCCC), fontSize = 13.sp)
+                Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C25)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    Text(text = "agnes-2.5-flash", color = Color(0xFFA78BFA), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Image & Keyframes :", color = Color(0xFFCCCCCC), fontSize = 13.sp)
+                Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C25)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    Text(text = "agnes-image-2.1-flash", color = Color(0xFFA78BFA), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Vidéo Synthèse :", color = Color(0xFFCCCCCC), fontSize = 13.sp)
+                Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C25)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    Text(text = "agnes-video-v2.0", color = Color(0xFFA78BFA), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Usage du jour & Quota Vidéo (500s max)
+        Text(text = "Usage du jour & Quota", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(8.dp))
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF14141C))
+                .background(Color(0xFF13131A))
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = "Texte", color = Color(0xFFCCCCCC), fontSize = 13.sp)
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF242434))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(text = defaultTextModel, color = Color(0xFFA78BFA), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Text(text = "Quota Vidéo Journalier (500s max) :", color = Color(0xFFA1A1AA), fontSize = 13.sp)
+                    Text(
+                        text = "${String.format("%.1f", usage.videoSeconds)} / 500 s",
+                        color = if (usage.videoSeconds > 450) Color(0xFFEF4444) else Color(0xFF34D399),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
                 }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = "Image", color = Color(0xFFCCCCCC), fontSize = 13.sp)
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF242434))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    Text(text = defaultImageModel, color = Color(0xFFA78BFA), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = "Vidéo", color = Color(0xFFCCCCCC), fontSize = 13.sp)
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF242434))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    Text(text = defaultVideoModel, color = Color(0xFFA78BFA), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(22.dp))
-
-        // Usage du jour
-        Text(text = "Usage du jour", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(modifier = Modifier.height(10.dp))
-
-        val usage = todayUsage ?: UsageEntity(date = "Aujourd'hui")
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF14141C))
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = "Images générées :", color = Color(0xFFA1A1AA), fontSize = 13.sp)
-                Text(text = "${usage.imageRequests}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = "Vidéos générées :", color = Color(0xFFA1A1AA), fontSize = 13.sp)
-                Text(
-                    text = "${usage.videoRequests} (${String.format("%.1f", usage.videoSeconds)} s)",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                Spacer(modifier = Modifier.height(6.dp))
+                AgnesShimmerProgressBar(
+                    progress = videoQuotaFraction,
+                    height = 8.dp,
+                    barColor = if (usage.videoSeconds > 450) Color(0xFFEF4444) else Color(0xFF8B5CF6)
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = "Requêtes texte / IA :", color = Color(0xFFA1A1AA), fontSize = 13.sp)
-                Text(text = "${usage.textRequests}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(text = "Vidéos créées :", color = Color(0xFFA1A1AA), fontSize = 13.sp)
+                Text(text = "${usage.videoRequests}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(text = "Images générées :", color = Color(0xFFA1A1AA), fontSize = 13.sp)
+                Text(text = "${usage.imageRequests}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(text = "Requêtes script / texte :", color = Color(0xFFA1A1AA), fontSize = 13.sp)
+                Text(text = "${usage.textRequests}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Journal technique
+        // Options
+        Text(text = "Options avancées", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF13131A))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Téléchargement automatique des rendus", color = Color.White, fontSize = 13.sp)
+                Switch(
+                    checked = autoDownload,
+                    onCheckedChange = {
+                        autoDownload = it
+                        onSaveSettings(settings.copy(autoDownload = it))
+                    },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF8B5CF6))
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Afficher les logs techniques", color = Color.White, fontSize = 13.sp)
+                Switch(
+                    checked = showTechLog,
+                    onCheckedChange = {
+                        showTechLog = it
+                        onSaveSettings(settings.copy(showTechnicalLog = it))
+                    },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF8B5CF6))
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // Bouton consultation des logs
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF1A1A24))
+                .background(Color(0xFF1C1C25))
                 .border(1.dp, Color(0xFF2E2E3E), RoundedCornerShape(12.dp))
                 .clickable(onClick = onOpenLogs),
             contentAlignment = Alignment.Center
@@ -294,8 +337,10 @@ fun SettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AgnesSvgIcon(icon = AgnesIcon.LOGS, tint = Color(0xFFA78BFA), size = 18.dp)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Afficher les Logs Techniques en Direct", color = Color(0xFFA78BFA), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text(text = "Consulter le journal technique en direct", color = Color(0xFFA78BFA), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
