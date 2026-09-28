@@ -67,11 +67,20 @@ interface FilmDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(film: FilmEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(films: List<FilmEntity>)
+
+    @Query("SELECT COUNT(*) FROM films")
+    suspend fun getFilmCount(): Int
+
     @Update
     suspend fun update(film: FilmEntity)
 
     @Query("DELETE FROM films WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("UPDATE films SET favorite = :favorite WHERE id = :id")
+    suspend fun updateFavorite(id: String, favorite: Boolean)
 }
 
 @Dao

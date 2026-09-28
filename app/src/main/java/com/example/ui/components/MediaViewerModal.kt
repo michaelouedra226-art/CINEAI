@@ -72,13 +72,17 @@ fun MediaViewerModal(
     film: FilmEntity? = null,
     onDismiss: () -> Unit,
     onToggleFavorite: ((String, Boolean) -> Unit)? = null,
+    onToggleFilmFavorite: ((String, Boolean) -> Unit)? = null,
     onDeleteCreation: ((String) -> Unit)? = null,
-    onDeleteFilm: ((String) -> Unit)? = null
+    onDeleteFilm: ((String) -> Unit)? = null,
+    onResumeFilm: ((String) -> Unit)? = null,
+    onRestartFilm: ((String) -> Unit)? = null
 ) {
     if (creation == null && film == null) return
 
     val context = LocalContext.current
     var isDetailsExpanded by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val isFilm = film != null
     val isVideo = isFilm || creation?.type == "video"
@@ -89,9 +93,50 @@ fun MediaViewerModal(
     }
 
     val primaryUrl = when {
-        isFilm -> "" // Handled scene by scene
+        isFilm -> film!!.getEffectiveThumbnail().orEmpty()
         creation?.resultUrl != null -> creation.resultUrl
         else -> creation?.thumbnail.orEmpty()
+    }
+
+    if (showDeleteConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = {
+                Text(
+                    text = if (isFilm) "Supprimer ce film ?" else "Supprimer ce média ?",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Cette action est irréversible et supprimera le projet de votre galerie locale.",
+                    color = Color(0xFFBBBBD0)
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        if (film != null) {
+                            onDeleteFilm?.invoke(film.id)
+                        } else if (creation != null) {
+                            onDeleteCreation?.invoke(creation.id)
+                        }
+                        onDismiss()
+                    }
+                ) {
+                    Text("Supprimer définitivement", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Annuler", color = Color(0xFFA1A1AA))
+                }
+            },
+            containerColor = Color(0xFF1E1E28),
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 
     Dialog(
@@ -196,9 +241,9 @@ fun MediaViewerModal(
                             }
                         }
 
-                        // Favori
-                        if (creation != null && onToggleFavorite != null) {
-                            val isFav = creation.favorite
+                        // Favori (Film ou Création)
+                        val isFav = if (film != null) film.favorite else creation?.favorite ?: false
+                        if ((film != null && onToggleFilmFavorite != null) || (creation != null && onToggleFavorite != null)) {
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
@@ -206,7 +251,11 @@ fun MediaViewerModal(
                                     .background(Color(0xFF1E1E28))
                                     .clickable {
                                         triggerHapticFeedback(context)
-                                        onToggleFavorite(creation.id, !isFav)
+                                        if (film != null) {
+                                            onToggleFilmFavorite?.invoke(film.id, !isFav)
+                                        } else if (creation != null) {
+                                            onToggleFavorite?.invoke(creation.id, !isFav)
+                                        }
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -226,12 +275,7 @@ fun MediaViewerModal(
                                 .background(Color(0xFF28181E))
                                 .clickable {
                                     triggerHapticFeedback(context)
-                                    if (film != null && onDeleteFilm != null) {
-                                        onDeleteFilm(film.id)
-                                    } else if (creation != null && onDeleteCreation != null) {
-                                        onDeleteCreation(creation.id)
-                                    }
-                                    onDismiss()
+                                    showDeleteConfirmDialog = true
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -249,7 +293,13 @@ fun MediaViewerModal(
                 ) {
                     when {
                         isFilm -> {
-                            FilmPlayerView(film = film!!)
+                            FilmPlayerView(
+                                film = film!!,
+                                onResumeFilm = onResumeFilm,
+                                onRestartFilm = onRestartFilm,
+                                onDeleteFilm = onDeleteFilm,
+                                onDismiss = onDismiss
+                            )
                         }
                         isVideo -> {
                             if (primaryUrl.isNotBlank()) {
@@ -572,7 +622,13 @@ fun VideoPlayerComponent(videoUrl: String) {
  * Affiche la liste des plans/scènes et permet de visionner et télécharger chaque séquence.
  */
 @Composable
-fun FilmPlayerView(film: FilmEntity) {
+fun FilmPlayerView(
+    film: FilmEntity,
+    onResumeFilm: ((String) -> Unit)? = null,
+    onRestartFilm: ((String) -> Unit)? = null,
+    onDeleteFilm: ((String) -> Unit)? = null,
+    onDismiss: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val scenes: List<SceneItem> = remember(film.scenesJson) {
         SceneItem.parseList(film.scenesJson)
@@ -580,8 +636,71 @@ fun FilmPlayerView(film: FilmEntity) {
 
     var selectedSceneIndex by remember { mutableIntStateOf(0) }
     val activeScene = scenes.getOrNull(selectedSceneIndex)
+    var showFullDecoupage by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Alerte si film interrompu / partiel
+        if (film.status == "partial" || film.status == "failed") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF24151C))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Production interrompue (${film.getCompletedScenesCount()}/${film.numScenes} scènes)",
+                        color = Color(0xFFF59E0B),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (!film.failureReason.isNullOrBlank()) {
+                        Text(
+                            text = film.failureReason,
+                            color = Color(0xFFBBBBCC),
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (onResumeFilm != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF7C3AED))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    onResumeFilm(film.id)
+                                    onDismiss?.invoke()
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Reprendre", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    if (onRestartFilm != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF282836))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    onRestartFilm(film.id)
+                                    onDismiss?.invoke()
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Recommencer", color = Color.White, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
         // Zone de lecture vidéo du plan sélectionné
         Box(
             modifier = Modifier
@@ -602,7 +721,7 @@ fun FilmPlayerView(film: FilmEntity) {
             }
         }
 
-        // Sélecteur de scènes (Carousel de plans)
+        // Sélecteur de scènes (Carousel de plans et Découpage)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -614,12 +733,24 @@ fun FilmPlayerView(film: FilmEntity) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Plans du film (${scenes.size} scènes)",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Plans (${scenes.size} scènes)",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (showFullDecoupage) "Masquer découpage" else "Voir découpage",
+                        color = Color(0xFFA78BFA),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { showFullDecoupage = !showFullDecoupage }
+                    )
+                }
 
                 if (activeScene?.videoUrl != null) {
                     Row(
@@ -646,75 +777,128 @@ fun FilmPlayerView(film: FilmEntity) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                itemsIndexed(scenes) { index, sc ->
-                    val isSelected = index == selectedSceneIndex
-                    Column(
-                        modifier = Modifier
-                            .width(110.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) Color(0xFF282836) else Color(0xFF1C1C25))
-                            .border(
-                                width = 1.dp,
-                                color = if (isSelected) Color(0xFFA78BFA) else Color(0xFF2E2E3E),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .clickable {
-                                triggerHapticFeedback(context)
-                                selectedSceneIndex = index
-                            }
-                            .padding(6.dp)
-                    ) {
-                        Box(
+            if (!showFullDecoupage) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    itemsIndexed(scenes) { index, sc ->
+                        val isSelected = index == selectedSceneIndex
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(60.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF0F0F14)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (!sc.keyframe.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = sc.keyframe,
-                                    contentDescription = sc.title,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                                .width(110.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) Color(0xFF282836) else Color(0xFF1C1C25))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) Color(0xFFA78BFA) else Color(0xFF2E2E3E),
+                                    shape = RoundedCornerShape(8.dp)
                                 )
-                            } else {
-                                AgnesSvgIcon(icon = AgnesIcon.FILM, tint = Color(0xFF6B7280), size = 20.dp)
-                            }
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    selectedSceneIndex = index
+                                }
+                                .padding(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(60.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF0F0F14)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (!sc.keyframe.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = sc.keyframe,
+                                        contentDescription = sc.title,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    AgnesSvgIcon(icon = AgnesIcon.FILM, tint = Color(0xFF6B7280), size = 20.dp)
+                                }
 
-                            if (!sc.videoUrl.isNullOrBlank()) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(22.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xCC7C3AED)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    AgnesSvgIcon(icon = AgnesIcon.PLAY, tint = Color.White, size = 10.dp)
+                                if (!sc.videoUrl.isNullOrBlank()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xCC7C3AED)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        AgnesSvgIcon(icon = AgnesIcon.PLAY, tint = Color.White, size = 10.dp)
+                                    }
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Scène ${sc.number}",
-                            color = if (isSelected) Color(0xFFA78BFA) else Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = sc.camera_movement,
-                            color = Color(0xFFA1A1AA),
-                            fontSize = 9.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Scène ${sc.number}",
+                                color = if (isSelected) Color(0xFFA78BFA) else Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = sc.camera_movement,
+                                color = Color(0xFFA1A1AA),
+                                fontSize = 9.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Découpage détaillé (Section 6 du cahier des charges)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    scenes.forEachIndexed { idx, sc ->
+                        val isSelected = idx == selectedSceneIndex
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) Color(0xFF282838) else Color(0xFF1B1B25))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    selectedSceneIndex = idx
+                                }
+                                .padding(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Scène ${sc.number} : ${sc.title}",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (sc.status == "done") Color(0xFF064E3B) else Color(0xFF3F3F46))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (sc.status == "done") "Terminé" else "En attente",
+                                        color = if (sc.status == "done") Color(0xFF34D399) else Color(0xFFD1D5DB),
+                                        fontSize = 9.sp
+                                    )
+                                }
+                            }
+                            Text(text = "Caméra : ${sc.camera_movement}", color = Color(0xFFA78BFA), fontSize = 10.sp)
+                            Text(text = sc.description, color = Color(0xFF9CA3AF), fontSize = 10.sp, maxLines = 2)
+                        }
                     }
                 }
             }

@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,16 +31,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.CreationEntity
 import com.example.data.model.FilmEntity
 import com.example.ui.components.AgnesInteractiveCard
+import com.example.ui.components.FilmProjectCard
 import com.example.ui.components.MediaViewerModal
 import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
@@ -51,8 +55,11 @@ fun GalleryScreen(
     creations: List<CreationEntity>,
     films: List<FilmEntity>,
     onToggleFavorite: (id: String, isFav: Boolean) -> Unit,
+    onToggleFilmFavorite: (id: String, isFav: Boolean) -> Unit = { _, _ -> },
     onDeleteCreation: (id: String) -> Unit,
     onDeleteFilm: (id: String) -> Unit,
+    onResumeFilm: ((String) -> Unit)? = null,
+    onRestartFilm: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -100,16 +107,22 @@ fun GalleryScreen(
         )
     }
 
-    // Modal Visualiseur Film (Lecteur de film et de scènes avec téléchargements)
+    // Modal Visualiseur Film (Lecteur de film, découpage, reprise et téléchargements)
     if (selectedFilmForDetail != null) {
         MediaViewerModal(
             creation = null,
             film = selectedFilmForDetail,
             onDismiss = { selectedFilmForDetail = null },
+            onToggleFilmFavorite = { id, isFav ->
+                onToggleFilmFavorite(id, isFav)
+                selectedFilmForDetail = selectedFilmForDetail?.copy(favorite = isFav)
+            },
             onDeleteFilm = { id ->
                 onDeleteFilm(id)
                 selectedFilmForDetail = null
-            }
+            },
+            onResumeFilm = onResumeFilm,
+            onRestartFilm = onRestartFilm
         )
     }
 
@@ -220,79 +233,26 @@ fun GalleryScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Films d'abord
+                // ═══════════════════════════════════════════════════════
+                // FILMS AVEC VIGNETTES HAUTE DÉFINITION (Section 6 du CDC)
+                // 1. Image de départ ; 2. Première keyframe ; 3. Première vidéo ; 4. Affiche Agnes Studio
+                // ═══════════════════════════════════════════════════════
                 items(filteredFilms) { film ->
-                    AgnesInteractiveCard(
+                    FilmProjectCard(
+                        film = film,
+                        onClick = {
+                            selectedFilmForDetail = film
+                        },
+                        onResume = if (onResumeFilm != null) { { onResumeFilm(film.id) } } else null,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(1f),
-                        onClick = {
-                            triggerHapticFeedback(context)
-                            selectedFilmForDetail = film
-                        }
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            if (film.startImage.isNotBlank()) {
-                                AsyncImage(
-                                    model = film.startImage,
-                                    contentDescription = film.title,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color(0xFF231B36)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        AgnesSvgIcon(
-                                            icon = AgnesIcon.FILM,
-                                            tint = Color(0xFFA78BFA),
-                                            size = 32.dp
-                                        )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(
-                                            text = film.title,
-                                            color = Color.White,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            modifier = Modifier.padding(horizontal = 8.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            // Badge FILM en haut à gauche
-                            Box(
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(Color(0xFF7C3AED))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    .align(Alignment.TopStart)
-                            ) {
-                                Text("FILM", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            // Bouton Lecture rapide en bas à droite
-                            Box(
-                                modifier = Modifier
-                                    .padding(6.dp)
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xCC7C3AED))
-                                    .align(Alignment.BottomEnd),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AgnesSvgIcon(icon = AgnesIcon.PLAY, tint = Color.White, size = 12.dp)
-                            }
-                        }
-                    }
+                            .aspectRatio(0.70f)
+                    )
                 }
 
-                // Créations (images, vidéos)
+                // ═══════════════════════════════════════════════════════
+                // CRÉATIONS (IMAGES, VIDÉOS)
+                // ═══════════════════════════════════════════════════════
                 items(filteredCreations) { creation ->
                     val mediaUrl = creation.resultUrl ?: creation.thumbnail.orEmpty()
                     AgnesInteractiveCard(

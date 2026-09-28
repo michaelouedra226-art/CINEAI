@@ -43,6 +43,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -306,12 +308,14 @@ fun AgnesShimmerProgressBar(
 
 /**
  * Zone de dépôt / sélection d'image avec pulsation et bordure illuminée.
+ * Affiche la vignette réelle si une image est sélectionnée.
  */
 @Composable
 fun AgnesUploadZone(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    hasImageSelected: Boolean = false
+    hasImageSelected: Boolean = false,
+    previewUrl: String? = null
 ) {
     val transition = rememberInfiniteTransition(label = "upload_pulse")
     val pulseAlpha by transition.animateFloat(
@@ -345,21 +349,60 @@ fun AgnesUploadZone(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AgnesSvgIcon(
-                icon = if (hasImageSelected) AgnesIcon.CHECK else AgnesIcon.UPLOAD,
-                tint = if (hasImageSelected) Color(0xFF10B981) else Color(0xFFA78BFA),
-                size = 28.dp
+        if (hasImageSelected && !previewUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = previewUrl,
+                contentDescription = "Image de départ",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
-            Spacer(modifier = Modifier.width(14.dp))
-            Text(
-                text = if (hasImageSelected) "Image source sélectionnée" else "Déposer ou choisir une image de départ",
-                color = if (hasImageSelected) Color(0xFF10B981) else Color(0xFFCCCCCC),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Transparent,
+                            0.5f to Color(0x55000000),
+                            1.0f to Color(0xDD0A0A0F)
+                        )
+                    )
             )
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AgnesSvgIcon(
+                    icon = AgnesIcon.CHECK,
+                    tint = Color(0xFF10B981),
+                    size = 18.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Vignette sélectionnée (Toucher pour changer)",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AgnesSvgIcon(
+                    icon = if (hasImageSelected) AgnesIcon.CHECK else AgnesIcon.UPLOAD,
+                    tint = if (hasImageSelected) Color(0xFF10B981) else Color(0xFFA78BFA),
+                    size = 28.dp
+                )
+                Spacer(modifier = Modifier.width(14.dp))
+                Text(
+                    text = if (hasImageSelected) "Image source sélectionnée" else "Déposer ou choisir une image de départ",
+                    color = if (hasImageSelected) Color(0xFF10B981) else Color(0xFFCCCCCC),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }

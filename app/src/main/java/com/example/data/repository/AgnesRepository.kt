@@ -88,6 +88,95 @@ class AgnesRepository(
             settingsDao.insertOrUpdate(SettingsEntity())
             TechnicalLogManager.log("INIT", "Initialisation des réglages Agnes Studio")
         }
+
+        // Initialisation des projets de films vitrines avec vignettes si la table est vide
+        val filmCount = filmDao.getFilmCount()
+        if (filmCount == 0) {
+            val nebulaThumb = "android.resource://com.example/drawable/img_film_nebula"
+            val cyberpunkThumb = "android.resource://com.example/drawable/img_film_cyberpunk"
+            val natureThumb = "android.resource://com.example/drawable/img_film_nature"
+
+            val showcaseFilms = listOf(
+                FilmEntity(
+                    id = "film_showcase_nebula",
+                    title = "Les Chroniques de Nébula",
+                    logline = "À l'orée d'une faille cosmique inexplorée, l'équipage de l'Astraea découvre les vestiges d'une civilisation stellaire.",
+                    prompt = "Odyssée spatiale de science-fiction, nébuleuse cosmique aux teintes violettes et cyan, vaisseau spatial explorateur",
+                    startImage = nebulaThumb,
+                    status = "done",
+                    createdAt = System.currentTimeMillis() - 86400000L * 2,
+                    updatedAt = System.currentTimeMillis() - 86400000L * 2,
+                    requestedDuration = 25.0,
+                    duration = 25.2,
+                    numScenes = 5,
+                    framesPerScene = 121,
+                    durationPerScene = 5.042,
+                    filmStyle = "Cinématique",
+                    favorite = true,
+                    scenesJson = SceneItem.serializeList(
+                        listOf(
+                            SceneItem(1, "L'Approche du Rift", "Le croiseur approche de l'anneau stellaire luminescent.", "Vaisseau spatial naviguant vers une faille galactique violette", "Caméra travelling avant lent vers le rift", "Travelling avant", "done", keyframe = nebulaThumb),
+                            SceneItem(2, "Entrée en Résonance", "Ondes gravitationnelles déformant la lumière des étoiles.", "Nébuleuse aux reflets cyan et cristaux cosmiques flottants", "Rotation orbitale douce autour du vaisseau", "Panoramique", "done", keyframe = nebulaThumb),
+                            SceneItem(3, "Le Cœur de la Nébuleuse", "Des structures colossales réagissent aux scanners.", "Ruines extraterrestres géantes illuminées par les réacteurs", "Plongée vertigineuse sur les monolithes", "Plongée", "done", keyframe = nebulaThumb),
+                            SceneItem(4, "Le Premier Contact", "Un artefact émet une impulsion d'énergie pure.", "Artefact géométrique pulsant d'une lueur dorée", "Zoom avant dynamique sur le noyau d'énergie", "Zoom avant", "done", keyframe = nebulaThumb),
+                            SceneItem(5, "Le Saut Quantique", "L'Astraea s'élance à travers la brèche dimensionnelle.", "Vaisseau traversant un portail d'hyper-espace flamboyant", "Travelling arrière rapide avec traînée lumineuse", "Travelling arrière", "done", keyframe = nebulaThumb)
+                        )
+                    )
+                ),
+                FilmEntity(
+                    id = "film_showcase_cyberpunk",
+                    title = "Cyberpunk 2099 : Neon Rain",
+                    logline = "Dans les bas-fonds de Néo-Kyoto, un agent dissident traque un réseau clandestin d'androïdes conscients.",
+                    prompt = "Cyberpunk néo-noir, mégalopole pluvieuse nocturne, reflets néon magenta et bleu sur le bitume",
+                    startImage = cyberpunkThumb,
+                    status = "done",
+                    createdAt = System.currentTimeMillis() - 86400000L,
+                    updatedAt = System.currentTimeMillis() - 86400000L,
+                    requestedDuration = 20.0,
+                    duration = 20.1,
+                    numScenes = 4,
+                    framesPerScene = 121,
+                    durationPerScene = 5.042,
+                    filmStyle = "Film Noir",
+                    favorite = false,
+                    scenesJson = SceneItem.serializeList(
+                        listOf(
+                            SceneItem(1, "Pluie sur le Boulevard 4", "Ruelle sombre de néo-métropole sous une pluie torrentielle.", "Détective cyborg sous la pluie, néons holographiques géants", "Travelling au ras du sol avec reflets d'eau", "Travelling bas", "done", keyframe = cyberpunkThumb),
+                            SceneItem(2, "Le Marché Obscur", "Allée bondée de boutiques cybernétiques aux lueurs incandescentes.", "Foule éclectique sous des enseignes néon kanji multicolores", "Plan moyen traversant la foule", "Travelling latéral", "done", keyframe = cyberpunkThumb),
+                            SceneItem(3, "La Filature Virtuelle", "Interface neurale projetant des flux de données chiffrées.", "Silhouette mystérieuse disparaissant dans un conduit de vapeur", "Panoramique rapide vers le toit", "Panoramique", "done", keyframe = cyberpunkThumb),
+                            SceneItem(4, "Confrontation au Sommet", "Face-à-face au bord d'un gratte-ciel vertigineux surplombant la ville.", "Deux figures silencieuses face à l'horizon cybernétique brumeux", "Plan large cinématographique avec vue plongeante", "Plan large", "done", keyframe = cyberpunkThumb)
+                        )
+                    )
+                ),
+                FilmEntity(
+                    id = "film_showcase_nature",
+                    title = "Wild Odyssey : L'Éveil Sauvage",
+                    logline = "Au cœur des forêts primordiales d'Asie du Sud-Est, le seigneur de la brume entreprend sa traversée à l'aube.",
+                    prompt = "Documentaire animalier cinématographique 8k, tigre majestueux dans la forêt de bambou brumeuse",
+                    startImage = natureThumb,
+                    status = "done",
+                    createdAt = System.currentTimeMillis() - 3600000L * 4,
+                    updatedAt = System.currentTimeMillis() - 3600000L * 4,
+                    requestedDuration = 15.0,
+                    duration = 15.1,
+                    numScenes = 3,
+                    framesPerScene = 121,
+                    durationPerScene = 5.042,
+                    filmStyle = "Documentaire",
+                    favorite = true,
+                    scenesJson = SceneItem.serializeList(
+                        listOf(
+                            SceneItem(1, "La Brume du Matin", "Rayons de soleil filtrant à travers les hautes canopées de bambou.", "Forêt tropicale mystique baignée de rayons dorés matinaux", "Travelling lent à travers les tiges de bambou", "Travelling avant", "done", keyframe = natureThumb),
+                            SceneItem(2, "L'Apparition du Prédateur", "Le tigre avance d'un pas feutré dans les herbes hautes perlées de rosée.", "Gros plan sur le regard perçant du tigre royal", "Mouvement fluide à hauteur d'yeux", "Plan serré", "done", keyframe = natureThumb),
+                            SceneItem(3, "Le Gardien du Sanctuaire", "Le félin s'arrête sur une falaise surplombant la vallée verdoyante.", "Panorama spectaculaire de la jungle s'étendant à perte de vue", "Élévation majestueuse de caméra vers le ciel", "Grue ascendante", "done", keyframe = natureThumb)
+                        )
+                    )
+                )
+            )
+
+            filmDao.insertAll(showcaseFilms)
+            TechnicalLogManager.log("INIT", "3 projets de films de démonstration initialisés avec vignettes")
+        }
     }
 
     suspend fun updateSettings(settingsEntity: SettingsEntity) = withContext(Dispatchers.IO) {
@@ -330,6 +419,7 @@ class AgnesRepository(
         requestedDuration: Double,
         manualScenes: Int?,
         startImage: String,
+        initialScenes: List<SceneItem>? = null,
         stopRequested: () -> Boolean = { false },
         onSceneUpdate: (suspend (scenes: List<SceneItem>, progressPct: Int, stepText: String) -> Unit)? = null
     ) = withContext(Dispatchers.IO) {
@@ -340,7 +430,7 @@ class AgnesRepository(
         }
 
         val breakdown = calculateBreakdown(requestedDuration, manualScenes)
-        val numScenes = breakdown.numScenes
+        val numScenes = initialScenes?.size ?: breakdown.numScenes
 
         TechnicalLogManager.log(
             "FILM_PIPELINE",
@@ -348,40 +438,51 @@ class AgnesRepository(
         )
 
         // ═══════════════════════════════════════════════════════
-        // PHASE 1 : SCRIPT (Appel agnes-2.5-flash)
+        // PHASE 1 : SCRIPT (Soit déjà validé en Découpage, soit agnes-2.5-flash)
         // ═══════════════════════════════════════════════════════
-        onSceneUpdate?.invoke(emptyList(), 15, "Phase 1 : Écriture du scénario (agnes-2.5-flash)...")
+        val sceneItems: MutableList<SceneItem>
+        val finalTitle: String
+        val finalLogline: String
 
-        val scriptRes = apiClient.generateFilmScript(
-            apiKey = settings.apiKey,
-            prompt = prompt,
-            style = filmStyle,
-            numScenes = numScenes,
-            stopRequested = stopRequested
-        )
+        if (initialScenes != null && initialScenes.isNotEmpty()) {
+            sceneItems = initialScenes.toMutableList()
+            finalTitle = title.ifBlank { "Projet Film Studio" }
+            finalLogline = prompt
+            onSceneUpdate?.invoke(sceneItems, 18, "Découpage validé, préparation de la production...")
+        } else {
+            onSceneUpdate?.invoke(emptyList(), 15, "Phase 1 : Écriture du scénario (agnes-2.5-flash)...")
 
-        if (scriptRes !is ApiResponse.Success) {
-            val errorMsg = if (scriptRes is ApiResponse.Error) scriptRes.message else "Échec de génération du scénario"
-            throw IllegalStateException(errorMsg)
-        }
-
-        val drafts = scriptRes.data.scenes
-        val finalTitle = title.ifBlank { scriptRes.data.title }
-        val finalLogline = scriptRes.data.logline
-
-        val sceneItems = drafts.map { d ->
-            SceneItem(
-                number = d.number,
-                title = d.title,
-                description = d.description,
-                image_prompt = d.imagePrompt,
-                video_prompt = d.videoPrompt,
-                camera_movement = d.cameraMovement,
-                status = "pending",
-                keyframe = null,
-                videoUrl = null
+            val scriptRes = apiClient.generateFilmScript(
+                apiKey = settings.apiKey,
+                prompt = prompt,
+                style = filmStyle,
+                numScenes = numScenes,
+                stopRequested = stopRequested
             )
-        }.toMutableList()
+
+            if (scriptRes !is ApiResponse.Success) {
+                val errorMsg = if (scriptRes is ApiResponse.Error) scriptRes.message else "Échec de génération du scénario"
+                throw IllegalStateException(errorMsg)
+            }
+
+            val drafts = scriptRes.data.scenes
+            finalTitle = title.ifBlank { scriptRes.data.title }
+            finalLogline = scriptRes.data.logline
+
+            sceneItems = drafts.map { d ->
+                SceneItem(
+                    number = d.number,
+                    title = d.title,
+                    description = d.description,
+                    image_prompt = d.imagePrompt,
+                    video_prompt = d.videoPrompt,
+                    camera_movement = d.cameraMovement,
+                    status = "pending",
+                    keyframe = null,
+                    videoUrl = null
+                )
+            }.toMutableList()
+        }
 
         val film = FilmEntity(
             id = filmId,
@@ -539,5 +640,166 @@ class AgnesRepository(
         filmDao.update(finishedFilm)
         onSceneUpdate?.invoke(sceneItems, 100, "Film achevé avec succès !")
         TechnicalLogManager.log("FILM_PIPELINE", "Film $filmId achevé avec succès ($numScenes plans)")
+    }
+
+    suspend fun updateFilmFavorite(id: String, favorite: Boolean) = withContext(Dispatchers.IO) {
+        filmDao.updateFavorite(id, favorite)
+    }
+
+    suspend fun generateScriptDrafts(
+        prompt: String,
+        style: String,
+        numScenes: Int
+    ): Pair<String, List<SceneItem>> = withContext(Dispatchers.IO) {
+        val settings = settingsDao.getSettingsDirect() ?: SettingsEntity()
+        if (settings.apiKey.isBlank()) {
+            throw IllegalStateException("Clé API manquante. Veuillez renseigner votre clé API dans les Réglages.")
+        }
+        val scriptRes = apiClient.generateFilmScript(
+            apiKey = settings.apiKey,
+            prompt = prompt,
+            style = style,
+            numScenes = numScenes,
+            stopRequested = { false }
+        )
+        if (scriptRes !is ApiResponse.Success) {
+            val errorMsg = if (scriptRes is ApiResponse.Error) scriptRes.message else "Échec de génération du découpage"
+            throw IllegalStateException(errorMsg)
+        }
+        val scenes = scriptRes.data.scenes.map { d ->
+            SceneItem(
+                number = d.number,
+                title = d.title,
+                description = d.description,
+                image_prompt = d.imagePrompt,
+                video_prompt = d.videoPrompt,
+                camera_movement = d.cameraMovement,
+                status = "pending",
+                keyframe = null,
+                videoUrl = null
+            )
+        }
+        Pair(scriptRes.data.title, scenes)
+    }
+
+    suspend fun resumeFilm(
+        filmId: String,
+        stopRequested: () -> Boolean = { false },
+        onSceneUpdate: (suspend (scenes: List<SceneItem>, progressPct: Int, stepText: String) -> Unit)? = null
+    ) = withContext(Dispatchers.IO) {
+        val settings = settingsDao.getSettingsDirect() ?: SettingsEntity()
+        if (settings.apiKey.isBlank()) {
+            throw IllegalStateException("Clé API manquante.")
+        }
+        val film = filmDao.getFilmByIdDirect(filmId) ?: throw IllegalStateException("Film introuvable")
+        val sceneItems = SceneItem.parseList(film.scenesJson).toMutableList()
+        val numScenes = film.numScenes
+        val breakdown = calculateBreakdown(film.requestedDuration, numScenes)
+
+        filmDao.update(film.copy(status = "processing", failureReason = null))
+
+        // Phase 2 : Keyframes manquantes
+        for (i in sceneItems.indices) {
+            if (stopRequested()) {
+                filmDao.update(film.copy(status = "partial", failureReason = "Interrompu par l'utilisateur", scenesJson = SceneItem.serializeList(sceneItems)))
+                throw CancellationException("Annulé")
+            }
+            val sc = sceneItems[i]
+            if (sc.keyframe.isNullOrBlank()) {
+                val pct = 20 + ((i + 1) * 20 / numScenes)
+                onSceneUpdate?.invoke(sceneItems, pct, "Keyframe ${i + 1}/$numScenes...")
+                val keyframePrompt = "${sc.image_prompt}, END frame scene ${i + 1}, 9:16 vertical cinema, 8k"
+                val imgRes = apiClient.generateImage(
+                    apiKey = settings.apiKey,
+                    prompt = keyframePrompt,
+                    style = film.filmStyle,
+                    size = "2K",
+                    ratio = "9:16",
+                    variations = 1,
+                    model = "agnes-image-2.1-flash",
+                    stopRequested = stopRequested
+                )
+                if (imgRes is ApiResponse.Success) {
+                    val keyframeUrl = imgRes.data.urls.firstOrNull()
+                    sceneItems[i] = sc.copy(keyframe = keyframeUrl, progressText = "Keyframe généré")
+                    filmDao.update(film.copy(scenesJson = SceneItem.serializeList(sceneItems)))
+                }
+                rateLimiter.realWait(RateLimiter.IMAGE_CALL_DELAY_MS, stopRequested)
+            }
+        }
+
+        // Phase 3 : Vidéos manquantes
+        var previousFrameUrl = film.startImage.ifBlank { sceneItems.firstOrNull()?.keyframe.orEmpty() }
+        for (i in sceneItems.indices) {
+            if (stopRequested()) {
+                filmDao.update(film.copy(status = "partial", failureReason = "Interrompu par l'utilisateur", scenesJson = SceneItem.serializeList(sceneItems)))
+                throw CancellationException("Annulé")
+            }
+            val sc = sceneItems[i]
+            val currentKeyframe = sc.keyframe ?: previousFrameUrl
+
+            if (sc.status != "done" || sc.videoUrl.isNullOrBlank()) {
+                val pctBase = 45 + (i * 50 / numScenes)
+                sceneItems[i] = sc.copy(status = "processing", progressText = "Rendu vidéo scène ${sc.number}...")
+                onSceneUpdate?.invoke(sceneItems, pctBase, "Scène ${sc.number}/$numScenes...")
+
+                val videoInit = apiClient.initiateVideo(
+                    apiKey = settings.apiKey,
+                    profile = settings.rateLimitProfile,
+                    prompt = "${sc.video_prompt}, continuité fluide, style ${film.filmStyle}",
+                    startImageUrl = previousFrameUrl,
+                    endImageUrl = currentKeyframe,
+                    durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
+                    numFrames = breakdown.framesPerScene,
+                    resolution = "720p 9:16",
+                    model = "agnes-video-v2.0",
+                    stopRequested = stopRequested
+                )
+                if (videoInit !is ApiResponse.Success) {
+                    val err = if (videoInit is ApiResponse.Error) videoInit.message else "Erreur création vidéo"
+                    sceneItems[i] = sc.copy(status = "failed", error = err)
+                    filmDao.update(film.copy(status = "partial", failureReason = err, scenesJson = SceneItem.serializeList(sceneItems)))
+                    throw IllegalStateException("Échec scène ${sc.number}: $err")
+                }
+                val videoId = videoInit.data.videoId
+                val pollRes = apiClient.pollVideo(
+                    apiKey = settings.apiKey,
+                    videoId = videoId,
+                    durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
+                    stopRequested = stopRequested
+                ) { prog, _, isStalled ->
+                    val txt = if (isStalled) "Stall détecté, attente..." else "Progression: $prog%"
+                    sceneItems[i] = sc.copy(status = if (isStalled) "stalled" else "processing", progressText = txt)
+                    onSceneUpdate?.invoke(sceneItems, pctBase + (prog / 4), "Scène ${sc.number} : $prog%")
+                }
+                if (pollRes !is ApiResponse.Success || pollRes.data.url.isNullOrBlank()) {
+                    val err = if (pollRes is ApiResponse.Error) pollRes.message else "Échec rendu vidéo"
+                    sceneItems[i] = sc.copy(status = "failed", error = err)
+                    filmDao.update(film.copy(status = "partial", failureReason = err, scenesJson = SceneItem.serializeList(sceneItems)))
+                    throw IllegalStateException("Échec rendu scène ${sc.number}: $err")
+                }
+                val finalVideoUrl = pollRes.data.url
+                sceneItems[i] = sc.copy(status = "done", videoUrl = finalVideoUrl, progressText = "Plan finalisé")
+                filmDao.update(film.copy(scenesJson = SceneItem.serializeList(sceneItems)))
+
+                val pauseMs = if (settings.rateLimitProfile == "token") RateLimiter.VIDEO_PAUSE_MS_TOKEN else if (settings.rateLimitProfile == "enterprise") 0L else RateLimiter.VIDEO_PAUSE_MS_FREE
+                if (pauseMs > 0 && i < sceneItems.size - 1) {
+                    rateLimiter.realWait(pauseMs, stopRequested) { rem, _ ->
+                        onSceneUpdate?.invoke(sceneItems, pctBase + 10, "Pause anti-throttling : ${rem}s...")
+                    }
+                }
+            }
+            previousFrameUrl = currentKeyframe
+        }
+
+        // Finalisation
+        val finishedFilm = film.copy(
+            status = "done",
+            failureReason = null,
+            actualDuration = breakdown.actualTotalDuration.toInt(),
+            scenesJson = SceneItem.serializeList(sceneItems)
+        )
+        filmDao.update(finishedFilm)
+        onSceneUpdate?.invoke(sceneItems, 100, "Film complété avec succès !")
     }
 }

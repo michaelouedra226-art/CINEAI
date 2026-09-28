@@ -51,11 +51,15 @@ jobs:
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+      - name: Fix executable permissions
+        run: |
+          chmod +x ./gradlew
+          if [ -f ./scripts/fix-executable-permissions.sh ]; then
+            ./scripts/fix-executable-permissions.sh
+          fi
 
       - name: Build debug APK
-        run: ./gradlew --no-daemon assembleDebug
+        run: ./gradlew --no-daemon clean assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

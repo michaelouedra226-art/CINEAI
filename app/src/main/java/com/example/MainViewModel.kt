@@ -277,7 +277,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         style: String,
         requestedDurationSeconds: Double,
         manualScenes: Int?,
-        startImage: String = ""
+        startImage: String = "",
+        initialScenes: List<SceneItem>? = null
     ) {
         if (_isFilmGenerating.value) return
         val currentKey = settings.value.apiKey
@@ -292,7 +293,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _filmProgress.value = 5
         _filmStepText.value = "Initialisation du pipeline..."
         _filmElapsedSeconds.value = 0
-        _currentFilmScenes.value = emptyList()
+        _currentFilmScenes.value = initialScenes ?: emptyList()
 
         filmTimerJob?.cancel()
         filmTimerJob = viewModelScope.launch {
@@ -313,6 +314,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     requestedDuration = requestedDurationSeconds,
                     manualScenes = manualScenes,
                     startImage = startImage,
+                    initialScenes = initialScenes,
                     stopRequested = { filmStopRequested },
                     onSceneUpdate = { scenes, progress, stepText ->
                         _currentFilmScenes.value = scenes
@@ -329,6 +331,81 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 filmTimerJob?.cancel()
                 _toastMessage.value = if (filmStopRequested) "Production annulée" else (e.message ?: "Génération interrompue")
             }
+        }
+    }
+
+    fun generateScriptDrafts(
+        prompt: String,
+        style: String,
+        numScenes: Int,
+        onSuccess: (String, List<SceneItem>) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val currentKey = settings.value.apiKey
+        if (currentKey.isBlank()) {
+            _toastMessage.value = "Veuillez configurer votre clé API dans les Réglages."
+            navigateTo(AgnesScreen.SETTINGS)
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val (draftTitle, scenes) = repository.generateScriptDrafts(prompt, style, numScenes)
+                onSuccess(draftTitle, scenes)
+            } catch (e: Exception) {
+                onError(e.message ?: "Erreur de découpage")
+            }
+        }
+    }
+
+    fun resumeFilm(filmId: String) {
+        if (_isFilmGenerating.value) return
+        val currentKey = settings.value.apiKey
+        if (currentKey.isBlank()) {
+            _toastMessage.value = "Veuillez configurer votre clé API dans les Réglages."
+            navigateTo(AgnesScreen.SETTINGS)
+            return
+        }
+
+        _isFilmGenerating.value = true
+        filmStopRequested = false
+        _filmProgress.value = 20
+        _filmStepText.value = "Reprise de la production..."
+        _filmElapsedSeconds.value = 0
+
+        filmTimerJob?.cancel()
+        filmTimerJob = viewModelScope.launch {
+            while (isActive && _isFilmGenerating.value) {
+                delay(1000)
+                _filmElapsedSeconds.value += 1
+            }
+        }
+
+        filmJob = viewModelScope.launch {
+            try {
+                repository.resumeFilm(
+                    filmId = filmId,
+                    stopRequested = { filmStopRequested },
+                    onSceneUpdate = { scenes, progress, stepText ->
+                        _currentFilmScenes.value = scenes
+                        _filmProgress.value = progress
+                        _filmStepText.value = stepText
+                    }
+                )
+                _isFilmGenerating.value = false
+                filmTimerJob?.cancel()
+                _toastMessage.value = "Production du film reprise et finalisée"
+                _hasGalleryBadge.value = true
+            } catch (e: Exception) {
+                _isFilmGenerating.value = false
+                filmTimerJob?.cancel()
+                _toastMessage.value = if (filmStopRequested) "Reprise interrompue" else (e.message ?: "Échec de reprise")
+            }
+        }
+    }
+
+    fun toggleFilmFavorite(filmId: String, favorite: Boolean) {
+        viewModelScope.launch {
+            repository.updateFilmFavorite(filmId, favorite)
         }
     }
 

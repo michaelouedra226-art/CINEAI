@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,36 +58,52 @@ import com.example.ui.components.AgnesInteractiveCard
 import com.example.ui.components.AgnesPrimaryButton
 import com.example.ui.components.AgnesShimmerProgressBar
 import com.example.ui.components.AgnesUploadZone
+import com.example.ui.components.FilmProjectCard
 import com.example.ui.components.MediaViewerModal
 import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
 
+enum class FilmWorkflowStep {
+    CONCEPT,    // Étape A : Paramétrage du projet (titre, prompt, durée, nombre de scènes)
+    DECOUPAGE   // Étape B : Découpage éditable avant génération coûteuse
+}
+
 @Composable
 fun FilmScreen(
     currentFilm: FilmEntity?,
+    recentFilms: List<FilmEntity> = emptyList(),
     isGenerating: Boolean,
     generationProgress: Int,
     currentStepText: String,
     elapsedSeconds: Int,
     currentScenes: List<SceneItem>,
-    onStartNewFilm: (title: String, prompt: String, style: String, requestedDurationSeconds: Double, manualScenes: Int?, startImage: String) -> Unit,
+    onStartNewFilm: (
+        title: String,
+        prompt: String,
+        style: String,
+        requestedDurationSeconds: Double,
+        manualScenes: Int?,
+        startImage: String,
+        initialScenes: List<SceneItem>?
+    ) -> Unit,
     onCancelGeneration: () -> Unit,
+    onPrepareDrafts: ((prompt: String, style: String, numScenes: Int, (String, List<SceneItem>) -> Unit) -> Unit)? = null,
+    onSelectFilm: ((FilmEntity) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var showCancelDialog by remember { mutableStateOf(false) }
     var selectedSceneForPreview by remember { mutableStateOf<SceneItem?>(null) }
 
+    // Workflow en 3 étapes : Étape A (Concept) -> Étape B (Découpage) -> Étape C (Production)
+    var currentWorkflowStep by remember { mutableStateOf(FilmWorkflowStep.CONCEPT) }
+
     // Formulaire de configuration Film
     var filmTitle by remember { mutableStateOf("") }
-    var filmPrompt by remember {
-        mutableStateOf("")
-    }
+    var filmPrompt by remember { mutableStateOf("") }
     var hasStartImage by remember { mutableStateOf(false) }
-    var startImageUrl by remember {
-        mutableStateOf("")
-    }
+    var startImageUrl by remember { mutableStateOf("") }
 
     var selectedStyle by remember { mutableStateOf("cinematic") }
     val styles = listOf(
@@ -101,6 +118,10 @@ fun FilmScreen(
     var requestedDurationSeconds by remember { mutableDoubleStateOf(30.0) }
     var isAutoScenesMode by remember { mutableStateOf(true) }
     var manualScenesCount by remember { mutableIntStateOf(5) }
+
+    // Découpage éditable (Étape B)
+    var draftScenes by remember { mutableStateOf<List<SceneItem>>(emptyList()) }
+    var isPreparingDrafts by remember { mutableStateOf(false) }
 
     // Breakdown automatique
     val breakdown = remember(requestedDurationSeconds, isAutoScenesMode, manualScenesCount) {
@@ -118,7 +139,7 @@ fun FilmScreen(
             },
             text = {
                 Text(
-                    text = "Voulez-vous vraiment annuler la génération du film ? L'état actuel sera sauvegardé en base de données pour permettre une reprise ultérieure.",
+                    text = "Voulez-vous vraiment annuler la génération du film ? L'état actuel sera sauvegardé en base de données avec le statut Partiel pour permettre une reprise ultérieure.",
                     color = Color(0xFFCCCCCC)
                 )
             },
@@ -163,10 +184,15 @@ fun FilmScreen(
     }
 
     if (isGenerating) {
-        // Wireframe 3.3 : Écran Film (état progression)
+        // ═══════════════════════════════════════════════════════
+        // ÉTAPE C — PRODUCTION (Timeline & Visualisation en direct)
+        // ═══════════════════════════════════════════════════════
         val minutes = elapsedSeconds / 60
         val seconds = elapsedSeconds % 60
         val timeString = String.format("%d:%02d", minutes, seconds)
+
+        val totalScenes = currentScenes.size.coerceAtLeast(1)
+        val completedScenes = currentScenes.count { it.status == "done" }
 
         Column(
             modifier = modifier
@@ -182,7 +208,7 @@ fun FilmScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Film",
+                        text = "Production Film",
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -231,11 +257,20 @@ fun FilmScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = currentStepText,
-                    color = Color(0xFFA1A1AA),
-                    fontSize = 13.sp
+                    text = "Scène $completedScenes / $totalScenes",
+                    color = Color(0xFFA78BFA),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = currentStepText,
+                color = Color(0xFFA1A1AA),
+                fontSize = 12.sp,
+                maxLines = 1
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
             AgnesShimmerProgressBar(
@@ -245,7 +280,7 @@ fun FilmScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Jalons (Script / Keyframes / Scènes)
+            // Timeline de production (Section 5 : Script -> Keyframes -> Vidéos -> Finalisation)
             val scriptDone = generationProgress >= 20
             val keyframesDone = generationProgress >= 45
             val scenesDone = generationProgress >= 100
@@ -266,7 +301,7 @@ fun FilmScreen(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Écriture du script (agnes-2.5-flash)",
+                        text = "1. Script & Découpage (agnes-2.5-flash)",
                         color = if (scriptDone) Color.White else Color(0xFFD4D4D8),
                         fontSize = 13.sp,
                         fontWeight = if (scriptDone) FontWeight.SemiBold else FontWeight.Normal
@@ -281,7 +316,7 @@ fun FilmScreen(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Génération des keyframes (agnes-image-2.1-flash)",
+                        text = "2. Keyframes visuels (agnes-image-2.1-flash)",
                         color = if (keyframesDone) Color.White else if (generationProgress in 20..44) Color.White else Color(0xFF71717A),
                         fontSize = 13.sp,
                         fontWeight = if (keyframesDone) FontWeight.SemiBold else FontWeight.Normal
@@ -296,7 +331,7 @@ fun FilmScreen(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Génération séquentielle des scènes (agnes-video-v2.0)",
+                        text = "3. Rendu vidéo séquentiel (agnes-video-v2.0)",
                         color = if (scenesDone) Color.White else if (generationProgress >= 45) Color.White else Color(0xFF71717A),
                         fontSize = 13.sp,
                         fontWeight = if (scenesDone) FontWeight.SemiBold else FontWeight.Normal
@@ -306,7 +341,12 @@ fun FilmScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(text = "Scènes", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "Scènes en production ($completedScenes/$totalScenes achevées)",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
             Spacer(modifier = Modifier.height(10.dp))
 
             LazyColumn(
@@ -405,34 +445,163 @@ fun FilmScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Bouton Annuler la génération
+            // Bouton Annuler la génération (Section 8)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF271C1C))
-                    .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(12.dp))
                     .clickable {
                         triggerHapticFeedback(context)
                         showCancelDialog = true
-                    },
+                    }
+                    .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AgnesSvgIcon(icon = AgnesIcon.CLOSE, tint = Color(0xFFEF4444), size = 18.dp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Annuler la génération",
-                        color = Color(0xFFEF4444),
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
-                    )
-                }
+                Text(
+                    text = "Interrompre la production",
+                    color = Color(0xFFEF4444),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
+    } else if (currentWorkflowStep == FilmWorkflowStep.DECOUPAGE) {
+        // ═══════════════════════════════════════════════════════
+        // ÉTAPE B — DÉCOUPAGE ÉDITABLE (Section 5 du CDC)
+        // ═══════════════════════════════════════════════════════
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color(0xFF0A0A0F))
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(text = "Étape B : Découpage", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "${draftScenes.size} scènes générées • modifiez les prompts avant production", color = Color(0xFFA78BFA), fontSize = 11.sp)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF1E1E28))
+                        .clickable { currentWorkflowStep = FilmWorkflowStep.CONCEPT }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("← Concept", color = Color(0xFFBBBBD0), fontSize = 11.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(draftScenes) { index, sc ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF13131A))
+                            .border(1.dp, Color(0xFF282836), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Scène ${sc.number} : ${sc.title}",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xFF24153A))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(sc.camera_movement, color = Color(0xFFA78BFA), fontSize = 9.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = "Prompt Image (Keyframe) :", color = Color(0xFFA1A1AA), fontSize = 10.sp)
+                        OutlinedTextField(
+                            value = sc.image_prompt,
+                            onValueChange = { newPrompt ->
+                                val updated = draftScenes.toMutableList()
+                                updated[index] = sc.copy(image_prompt = newPrompt)
+                                draftScenes = updated
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF191924),
+                                unfocusedContainerColor = Color(0xFF191924),
+                                focusedBorderColor = Color(0xFF7C3AED),
+                                unfocusedBorderColor = Color(0xFF2C2C3C),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = "Prompt Vidéo (Mouvement) :", color = Color(0xFFA1A1AA), fontSize = 10.sp)
+                        OutlinedTextField(
+                            value = sc.video_prompt,
+                            onValueChange = { newPrompt ->
+                                val updated = draftScenes.toMutableList()
+                                updated[index] = sc.copy(video_prompt = newPrompt)
+                                draftScenes = updated
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF191924),
+                                unfocusedContainerColor = Color(0xFF191924),
+                                focusedBorderColor = Color(0xFF7C3AED),
+                                unfocusedBorderColor = Color(0xFF2C2C3C),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            AgnesPrimaryButton(
+                text = "Lancer la production (${draftScenes.size} plans)",
+                onClick = {
+                    val startImg = if (hasStartImage) startImageUrl else ""
+                    onStartNewFilm(
+                        filmTitle,
+                        filmPrompt,
+                        selectedStyle,
+                        requestedDurationSeconds,
+                        draftScenes.size,
+                        startImg,
+                        draftScenes
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                icon = AgnesIcon.GENERATE
+            )
+        }
     } else {
-        // Mode Configuration Film Studio (Sections 11 & 15 du cahier des charges)
+        // ═══════════════════════════════════════════════════════
+        // ÉTAPE A — CONCEPT (Formulaire de configuration Film)
+        // ═══════════════════════════════════════════════════════
         Column(
             modifier = modifier
                 .fillMaxSize()
@@ -441,36 +610,191 @@ fun FilmScreen(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Film Studio IA",
+                text = "Studio Film",
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Pipeline complet : Image clé de départ → Script → Keyframes → Vidéos synchronisées.",
+                text = "Créez des récits cinématographiques multi-plans avec continuité IA",
                 color = Color(0xFFA1A1AA),
-                fontSize = 13.sp
+                fontSize = 12.sp
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            // ═══════════════════════════════════════════════════════
+            // PROJETS DE FILM RÉCENTS (Vignettes cinéma & statut)
+            // ═══════════════════════════════════════════════════════
+            if (recentFilms.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
 
-            // 1. Image de départ
-            Text(text = "1. Image de départ", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Projets de film",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF24153A))
+                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "${recentFilms.size}",
+                                color = Color(0xFFA78BFA),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Vignettes & découpage",
+                        color = Color(0xFF71717A),
+                        fontSize = 11.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(recentFilms) { film ->
+                        FilmProjectCard(
+                            film = film,
+                            width = 135.dp,
+                            height = 200.dp,
+                            onClick = {
+                                if (onSelectFilm != null) {
+                                    onSelectFilm(film)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Titre du film
+            Text(text = "Titre du projet (optionnel)", color = Color(0xFFA1A1AA), fontSize = 13.sp)
             Spacer(modifier = Modifier.height(6.dp))
-            AgnesUploadZone(
-                hasImageSelected = hasStartImage,
-                onClick = { hasStartImage = !hasStartImage }
+            OutlinedTextField(
+                value = filmTitle,
+                onValueChange = { filmTitle = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Ex: Les Chroniques de Nébula...", color = Color(0xFF555566)) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFF13131A),
+                    unfocusedContainerColor = Color(0xFF13131A),
+                    focusedBorderColor = Color(0xFF8B5CF6),
+                    unfocusedBorderColor = Color(0xFF282836),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 2. Slider durée : 10 s -> 600 s
+            // 1. Image de départ facultative avec aperçu de la vignette
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "2. Durée du film", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    text = "1. Image de départ (facultatif)",
+                    color = Color(0xFFA1A1AA),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                if (hasStartImage) {
+                    Text(
+                        text = "Effacer",
+                        color = Color(0xFFEF4444),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable {
+                            hasStartImage = false
+                            startImageUrl = ""
+                        }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            AgnesUploadZone(
+                hasImageSelected = hasStartImage,
+                previewUrl = if (hasStartImage) startImageUrl else null,
+                onClick = {
+                    hasStartImage = !hasStartImage
+                    if (hasStartImage && startImageUrl.isBlank()) {
+                        startImageUrl = "android.resource://com.example/drawable/img_film_nebula"
+                    }
+                }
+            )
+
+            // Vignettes prédéfinies rapides pour l'image de départ
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val presets = listOf(
+                    Triple("Nébuleuse", "android.resource://com.example/drawable/img_film_nebula", "Sci-Fi"),
+                    Triple("Cyberpunk", "android.resource://com.example/drawable/img_film_cyberpunk", "Néo-Noir"),
+                    Triple("Nature", "android.resource://com.example/drawable/img_film_nature", "Wild")
+                )
+                presets.forEach { (label, uri, category) ->
+                    val isChosen = hasStartImage && startImageUrl == uri
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isChosen) Color(0xFF3B1E6D) else Color(0xFF161622))
+                            .border(1.dp, if (isChosen) Color(0xFFA78BFA) else Color(0xFF28283A), RoundedCornerShape(8.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                hasStartImage = true
+                                startImageUrl = uri
+                                if (filmTitle.isBlank()) {
+                                    filmTitle = when (label) {
+                                        "Nébuleuse" -> "Les Chroniques de Nébula"
+                                        "Cyberpunk" -> "Cyberpunk 2099"
+                                        else -> "Wild Odyssey"
+                                    }
+                                }
+                            }
+                            .padding(vertical = 7.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "✦ $label",
+                            color = if (isChosen) Color.White else Color(0xFFBBBBD0),
+                            fontSize = 11.sp,
+                            fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2. Durée du film (10s - 600s)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "2. Durée cible", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Text(
                     text = "${requestedDurationSeconds.toInt()} secondes",
                     color = Color(0xFFA78BFA),
@@ -490,64 +814,130 @@ fun FilmScreen(
                 )
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 3. Mode scènes : auto ou manuel
+            // 3. Nombre de scènes : Sélecteur clair avec modes Automatique et Personnalisé (Section 4 du CDC)
+            Text(text = "3. Nombre de scènes", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(6.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(text = "3. Mode scènes : ", color = Color(0xFFA1A1AA), fontSize = 13.sp)
-                Spacer(modifier = Modifier.width(6.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { isAutoScenesMode = true }
+                // Mode Automatique
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isAutoScenesMode) Color(0xFF7C3AED) else Color(0xFF1A1A24))
+                        .clickable { isAutoScenesMode = true }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    RadioButton(
-                        selected = isAutoScenesMode,
-                        onClick = { isAutoScenesMode = true },
-                        colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF8B5CF6), unselectedColor = Color(0xFF555566))
+                    Text(
+                        text = "Automatique (${breakdown.numScenes} scènes)",
+                        color = if (isAutoScenesMode) Color.White else Color(0xFFBBBBD0),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
-                    Text(text = "Auto", color = if (isAutoScenesMode) Color.White else Color(0xFF888899), fontSize = 13.sp)
                 }
 
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { isAutoScenesMode = false }
+                // Mode Personnalisé
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (!isAutoScenesMode) Color(0xFF7C3AED) else Color(0xFF1A1A24))
+                        .clickable { isAutoScenesMode = false }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    RadioButton(
-                        selected = !isAutoScenesMode,
-                        onClick = { isAutoScenesMode = false },
-                        colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF8B5CF6), unselectedColor = Color(0xFF555566))
+                    Text(
+                        text = "Personnalisé ($manualScenesCount scènes)",
+                        color = if (!isAutoScenesMode) Color.White else Color(0xFFBBBBD0),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
-                    Text(text = "Manuel (2–50)", color = if (!isAutoScenesMode) Color.White else Color(0xFF888899), fontSize = 13.sp)
                 }
             }
 
+            // Commandes du mode personnalisé (Section 4.2 : boutons - et +, valeurs suggérées 3, 5, 8, 10, 12)
             if (!isAutoScenesMode) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(text = "Ajustement précis :", color = Color(0xFFBBBBD0), fontSize = 12.sp)
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF282836))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    if (manualScenesCount > 1) manualScenesCount--
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("−", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Text(
+                            text = "$manualScenesCount",
+                            color = Color(0xFFA78BFA),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF282836))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    if (manualScenesCount < 20) manualScenesCount++
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("+", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Suggestions rapides : 3, 5, 8, 10, 12
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(3, 5, 8, 12).forEach { n ->
+                    listOf(3, 5, 8, 10, 12).forEach { n ->
                         val isSelected = manualScenesCount == n
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) Color(0xFF7C3AED) else Color(0xFF1C1C25))
-                                .clickable { manualScenesCount = n }
-                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                                .border(1.dp, if (isSelected) Color(0xFFA78BFA) else Color(0xFF2E2E3E), RoundedCornerShape(8.dp))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    manualScenesCount = n
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text(text = "$n scènes", color = if (isSelected) Color.White else Color(0xFFBBBBCC), fontSize = 12.sp)
+                            Text(text = "$n plans", color = if (isSelected) Color.White else Color(0xFFBBBBCC), fontSize = 11.sp)
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Carte Breakdown Automatique
+            // Résumé avant lancement (Section 4.2 & 4.3 du CDC)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -556,25 +946,24 @@ fun FilmScreen(
                     .border(1.dp, Color(0xFF282836), RoundedCornerShape(12.dp))
                     .padding(12.dp)
             ) {
-                Text(text = "Breakdown Automatique (Règle 8n + 1)", color = Color(0xFFA78BFA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(text = "Nombre de scènes :", color = Color(0xFF9CA3AF), fontSize = 12.sp)
-                    Text(text = "${breakdown.numScenes} scènes", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(text = "Frames par scène :", color = Color(0xFF9CA3AF), fontSize = 12.sp)
-                    Text(text = "${breakdown.framesPerScene} frames (≈ ${String.format("%.2f", breakdown.durationPerScene)}s)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(text = "Durée réelle totale :", color = Color(0xFF9CA3AF), fontSize = 12.sp)
-                    Text(text = "${String.format("%.1f", breakdown.actualTotalDuration)} secondes", color = Color(0xFF34D399), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+                Text(
+                    text = "Résumé du découpage",
+                    color = Color(0xFFA78BFA),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${breakdown.numScenes} scènes · environ ${String.format("%.1f", breakdown.durationPerScene)}s par scène · durée finale estimée : ${String.format("%.1f", breakdown.actualTotalDuration)}s",
+                    color = Color(0xFFE5E7EB),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 4. Style visuel (au moins 5 options)
+            // 4. Style visuel
             Text(text = "4. Style visuel", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(6.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -595,8 +984,8 @@ fun FilmScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 5. Prompt principal
-            Text(text = "5. Prompt principal du film", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            // 5. Prompt principal du film
+            Text(text = "5. Prompt principal du film (intrigue & univers)", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = filmPrompt,
@@ -604,7 +993,7 @@ fun FilmScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(105.dp),
-                placeholder = { Text("Décrivez l'intrigue, la continuité et les éléments clés...", color = Color(0xFF555566)) },
+                placeholder = { Text("Décrivez l'intrigue, les personnages et les ambiances...", color = Color(0xFF555566)) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = Color(0xFF13131A),
                     unfocusedContainerColor = Color(0xFF13131A),
@@ -616,26 +1005,79 @@ fun FilmScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Bouton Lancer la production
-            AgnesPrimaryButton(
-                text = "Lancer la production du Film",
-                onClick = {
-                    val startImg = if (hasStartImage) startImageUrl else ""
-                    onStartNewFilm(
-                        filmTitle,
-                        filmPrompt,
-                        selectedStyle,
-                        requestedDurationSeconds,
-                        if (isAutoScenesMode) null else manualScenesCount,
-                        startImg
-                    )
-                },
+            // Actions de lancement
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                enabled = filmPrompt.isNotBlank(),
-                icon = AgnesIcon.FILM
-            )
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Bouton Découpage intermédiaire (Étape B)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, Color(0xFF7C3AED), RoundedCornerShape(12.dp))
+                        .clickable(enabled = filmPrompt.isNotBlank() && !isPreparingDrafts) {
+                            triggerHapticFeedback(context)
+                            isPreparingDrafts = true
+                            val num = if (isAutoScenesMode) null else manualScenesCount
+                            val count = breakdown.numScenes
+                            if (onPrepareDrafts != null) {
+                                onPrepareDrafts(filmPrompt, selectedStyle, count) { finalTitle, generatedDrafts ->
+                                    isPreparingDrafts = false
+                                    if (filmTitle.isBlank()) filmTitle = finalTitle
+                                    draftScenes = generatedDrafts
+                                    currentWorkflowStep = FilmWorkflowStep.DECOUPAGE
+                                }
+                            } else {
+                                // Fallback structuré local
+                                draftScenes = (1..count).map { idx ->
+                                    SceneItem(
+                                        number = idx,
+                                        title = "Plan $idx",
+                                        description = "Plan $idx du projet $filmTitle",
+                                        image_prompt = "$filmPrompt, plan $idx, style $selectedStyle",
+                                        video_prompt = "$filmPrompt, caméra travelling, plan $idx",
+                                        camera_movement = "Travelling avant",
+                                        status = "pending"
+                                    )
+                                }
+                                isPreparingDrafts = false
+                                currentWorkflowStep = FilmWorkflowStep.DECOUPAGE
+                            }
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isPreparingDrafts) "Génération script..." else "1. Découpage →",
+                        color = Color(0xFFA78BFA),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Bouton Lancer directement (Étape C)
+                AgnesPrimaryButton(
+                    text = "Lancer directement",
+                    onClick = {
+                        val startImg = if (hasStartImage) startImageUrl else ""
+                        onStartNewFilm(
+                            filmTitle,
+                            filmPrompt,
+                            selectedStyle,
+                            requestedDurationSeconds,
+                            if (isAutoScenesMode) null else manualScenesCount,
+                            startImg,
+                            null
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = filmPrompt.isNotBlank() && !isPreparingDrafts,
+                    icon = AgnesIcon.FILM
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
         }

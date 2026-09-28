@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,6 +47,7 @@ import com.example.ui.components.AgnesInteractiveCard
 import com.example.ui.components.AgnesPrimaryButton
 import com.example.ui.components.AgnesShimmerProgressBar
 import com.example.ui.components.AgnesUploadZone
+import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
 
@@ -53,6 +58,7 @@ fun VideosScreen(
     onGenerateVideo: (prompt: String, mode: String, startImg: String?, duration: Int, resolution: String, numFrames: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var mode by remember { mutableStateOf("image") } // "text" | "image"
     var prompt by remember {
         mutableStateOf("")
@@ -156,6 +162,34 @@ fun VideosScreen(
             ),
             shape = RoundedCornerShape(12.dp)
         )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Suggestions de prompt vidéo (Section 7 du CDC)
+        val videoSuggestions = listOf(
+            "Travelling avant fluide",
+            "Mouvement panoramique circulaire",
+            "Ralenti dramatique 60fps",
+            "Zoom lent continu",
+            "Caméra portée immersive"
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(videoSuggestions) { sugg ->
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF151522))
+                        .border(1.dp, Color(0xFF2E2E40), RoundedCornerShape(8.dp))
+                        .clickable {
+                            triggerHapticFeedback(context)
+                            prompt = if (prompt.isBlank()) sugg else "$prompt, $sugg"
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(text = "+ $sugg", color = Color(0xFFD1D5DB), fontSize = 11.sp)
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(14.dp))
 

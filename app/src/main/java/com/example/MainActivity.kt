@@ -77,6 +77,7 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
     val hasGalleryBadge by viewModel.hasGalleryBadge.collectAsStateWithLifecycle()
     val showLogsModal by viewModel.showLogsModal.collectAsStateWithLifecycle()
     var activePreviewCreation by remember { mutableStateOf<com.example.data.model.CreationEntity?>(null) }
+    var activePreviewFilm by remember { mutableStateOf<com.example.data.model.FilmEntity?>(null) }
 
     val hasActiveQueue = queueItems.any { it.status in listOf("queued", "processing", "stalled") } || isFilmGenerating
 
@@ -137,16 +138,33 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                 AgnesScreen.FILM -> {
                     FilmScreen(
                         currentFilm = allFilms.firstOrNull(),
+                        recentFilms = allFilms,
                         isGenerating = isFilmGenerating,
                         generationProgress = filmProgress,
                         currentStepText = filmStepText,
                         elapsedSeconds = filmElapsedSeconds,
                         currentScenes = currentFilmScenes,
-                        onStartNewFilm = { title, prompt, style, requestedDurationSeconds, manualScenes, startImage ->
-                            viewModel.startNewFilm(title, prompt, style, requestedDurationSeconds, manualScenes, startImage)
+                        onStartNewFilm = { title, prompt, style, requestedDurationSeconds, manualScenes, startImage, initialScenes ->
+                            viewModel.startNewFilm(title, prompt, style, requestedDurationSeconds, manualScenes, startImage, initialScenes)
                         },
                         onCancelGeneration = {
                             viewModel.cancelFilmGeneration()
+                        },
+                        onPrepareDrafts = { prompt, style, numScenes, onReady ->
+                            viewModel.generateScriptDrafts(
+                                prompt = prompt,
+                                style = style,
+                                numScenes = numScenes,
+                                onSuccess = { draftTitle, scenes ->
+                                    onReady(draftTitle, scenes)
+                                },
+                                onError = {
+                                    // Géré via toast
+                                }
+                            )
+                        },
+                        onSelectFilm = { film ->
+                            activePreviewFilm = film
                         }
                     )
                 }
@@ -157,11 +175,22 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                         onToggleFavorite = { id, isFav ->
                             viewModel.toggleFavorite(id, isFav)
                         },
+                        onToggleFilmFavorite = { id, isFav ->
+                            viewModel.toggleFilmFavorite(id, isFav)
+                        },
                         onDeleteCreation = { id ->
                             viewModel.deleteCreation(id)
                         },
                         onDeleteFilm = { id ->
                             viewModel.deleteFilm(id)
+                        },
+                        onResumeFilm = { id ->
+                            viewModel.resumeFilm(id)
+                            viewModel.navigateTo(AgnesScreen.FILM)
+                        },
+                        onRestartFilm = { id ->
+                            viewModel.resumeFilm(id)
+                            viewModel.navigateTo(AgnesScreen.FILM)
                         }
                     )
                 }
@@ -219,6 +248,27 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                     onDeleteCreation = { id ->
                         viewModel.deleteCreation(id)
                         activePreviewCreation = null
+                    }
+                )
+            }
+
+            // Visualiseur de projet film
+            if (activePreviewFilm != null) {
+                com.example.ui.components.MediaViewerModal(
+                    creation = null,
+                    film = activePreviewFilm,
+                    onDismiss = { activePreviewFilm = null },
+                    onToggleFilmFavorite = { id, isFav ->
+                        viewModel.toggleFilmFavorite(id, isFav)
+                        activePreviewFilm = activePreviewFilm?.copy(favorite = isFav)
+                    },
+                    onDeleteFilm = { id ->
+                        viewModel.deleteFilm(id)
+                        activePreviewFilm = null
+                    },
+                    onResumeFilm = { id ->
+                        viewModel.resumeFilm(id)
+                        activePreviewFilm = null
                     }
                 )
             }

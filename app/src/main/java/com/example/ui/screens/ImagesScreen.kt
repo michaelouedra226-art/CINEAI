@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +43,7 @@ import com.example.data.model.CreationEntity
 import com.example.ui.components.AgnesInteractiveCard
 import com.example.ui.components.AgnesPrimaryButton
 import com.example.ui.components.AgnesUploadZone
+import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
 
@@ -52,6 +55,7 @@ fun ImagesScreen(
     onSelectRecent: (CreationEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var prompt by remember {
         mutableStateOf("")
     }
@@ -117,6 +121,63 @@ fun ImagesScreen(
             ),
             shape = RoundedCornerShape(12.dp)
         )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Suggestions de prompt sous forme de boutons (Section 7 du CDC : sujet, ambiance, éclairage, caméra, époque, rendu visuel)
+        val promptCategories = listOf(
+            "Sujet" to listOf("Portrait cinématographique", "Cité cyberpunk 2088", "Paysage futuriste"),
+            "Ambiance" to listOf("Mystérieuse et ténébreuse", "Épique et grandiose", "Onirique"),
+            "Éclairage" to listOf("Heure dorée", "Néon volumétrique", "Clair-obscur dramatique"),
+            "Caméra" to listOf("Objectif anamorphique 35mm", "Grand angle contre-plongée", "Gros plan macro"),
+            "Époque" to listOf("Années 80 néo-rétro", "Médiéval fantastique", "Ère spatiale 2150"),
+            "Rendu" to listOf("Grain pellicule 35mm", "Photoréaliste 8k", "Rendu Octane")
+        )
+        var selectedCategoryIndex by remember { mutableIntStateOf(0) }
+
+        Column(modifier = Modifier.fillMaxWidth()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(promptCategories) { idx, (catName, _) ->
+                    val isCatSelected = idx == selectedCategoryIndex
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isCatSelected) Color(0xFF7C3AED) else Color(0xFF1E1E28))
+                            .clickable { selectedCategoryIndex = idx }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = catName,
+                            color = if (isCatSelected) Color.White else Color(0xFFA1A1AA),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Suggestions de la catégorie active
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val currentSuggestions = promptCategories[selectedCategoryIndex].second
+                items(currentSuggestions) { sugg ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF151522))
+                            .border(1.dp, Color(0xFF2E2E40), RoundedCornerShape(8.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                prompt = if (prompt.isBlank()) sugg else "$prompt, $sugg"
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(text = "+ $sugg", color = Color(0xFFD1D5DB), fontSize = 11.sp)
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

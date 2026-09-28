@@ -49,6 +49,9 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
+          if [ -f ./scripts/fix-executable-permissions.sh ]; then
+            ./scripts/fix-executable-permissions.sh
+          fi
           ./gradlew --no-daemon clean bundleRelease assembleRelease
 
       - name: Upload release bundle (AAB)

@@ -44,8 +44,43 @@ data class FilmEntity(
     val actualDuration: Int = 0,
     val filmStyle: String = "Cinématique",
     val scenesJson: String = "[]",
-    val usageImpactJson: String = "{\"imageRequests\":0,\"videoSeconds\":0}"
-)
+    val usageImpactJson: String = "{\"imageRequests\":0,\"videoSeconds\":0}",
+    val favorite: Boolean = false,
+    val failureReason: String? = null
+) {
+    /**
+     * Priorité de la vignette selon le cahier des charges (Section 6) :
+     * 1. image de départ du film ;
+     * 2. première keyframe générée ;
+     * 3. première image vidéo disponible ;
+     * 4. null (fallback graphique stylé Agnes Studio)
+     */
+    fun getEffectiveThumbnail(): String? {
+        if (startImage.isNotBlank()) return startImage
+        val scenes = SceneItem.parseList(scenesJson)
+        val firstKeyframe = scenes.firstOrNull { !it.keyframe.isNullOrBlank() }?.keyframe
+        if (!firstKeyframe.isNullOrBlank()) return firstKeyframe
+        val firstVideo = scenes.firstOrNull { !it.videoUrl.isNullOrBlank() }?.videoUrl
+        if (!firstVideo.isNullOrBlank()) return firstVideo
+        return null
+    }
+
+    fun getCompletedScenesCount(): Int {
+        val scenes = SceneItem.parseList(scenesJson)
+        return scenes.count { it.status == "done" }
+    }
+
+    fun hasPlayableVideo(): Boolean {
+        val scenes = SceneItem.parseList(scenesJson)
+        return scenes.any { !it.videoUrl.isNullOrBlank() }
+    }
+
+    fun getFirstIncompleteSceneIndex(): Int {
+        val scenes = SceneItem.parseList(scenesJson)
+        val idx = scenes.indexOfFirst { it.status != "done" }
+        return if (idx >= 0) idx else 0
+    }
+}
 
 @Entity(tableName = "usage")
 data class UsageEntity(
