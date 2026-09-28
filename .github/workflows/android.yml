@@ -28,10 +28,14 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platform-tools
-            platforms;android-36.1
-            build-tools;36.0.0
+          packages: ""
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36.1" \
+            "build-tools;36.0.0"
 
       # Le projet configure une clé debug locale, ignorée par Git.
       # Ce fichier temporaire permet donc de signer l'APK debug sur le runner.
