@@ -27,9 +27,11 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-36.1" "build-tools;36.0.0" "platform-tools"
+        with:
+          packages: |
+            platform-tools
+            platforms;android-36.1
+            build-tools;36.0.0
 
       # Le projet configure une clé debug locale, ignorée par Git.
       # Ce fichier temporaire permet donc de signer l'APK debug sur le runner.
@@ -44,6 +46,9 @@ jobs:
             -keysize 2048 \
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
 
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug

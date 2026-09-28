@@ -14,11 +14,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.model.CreationEntity
 import com.example.ui.components.AgnesBottomBar
 import com.example.ui.components.AgnesHeader
 import com.example.ui.components.AgnesScreen
@@ -72,6 +76,7 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
     val toastMessage by viewModel.toastMessage.collectAsStateWithLifecycle()
     val hasGalleryBadge by viewModel.hasGalleryBadge.collectAsStateWithLifecycle()
     val showLogsModal by viewModel.showLogsModal.collectAsStateWithLifecycle()
+    var activePreviewCreation by remember { mutableStateOf<com.example.data.model.CreationEntity?>(null) }
 
     val hasActiveQueue = queueItems.any { it.status in listOf("queued", "processing", "stalled") } || isFilmGenerating
 
@@ -115,8 +120,8 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                         onGenerate = { prompt, style, size, ratio, variations ->
                             viewModel.generateImages(prompt, style, size, ratio, variations)
                         },
-                        onSelectRecent = {
-                            viewModel.navigateTo(AgnesScreen.GALLERY)
+                        onSelectRecent = { creation ->
+                            activePreviewCreation = creation
                         }
                     )
                 }
@@ -198,6 +203,23 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                     logs = technicalLogs,
                     onClose = { viewModel.showLogs(false) },
                     onClear = { viewModel.clearLogs() }
+                )
+            }
+
+            // Visualiseur de média récent
+            if (activePreviewCreation != null) {
+                com.example.ui.components.MediaViewerModal(
+                    creation = activePreviewCreation,
+                    film = null,
+                    onDismiss = { activePreviewCreation = null },
+                    onToggleFavorite = { id, isFav ->
+                        viewModel.toggleFavorite(id, isFav)
+                        activePreviewCreation = activePreviewCreation?.copy(favorite = isFav)
+                    },
+                    onDeleteCreation = { id ->
+                        viewModel.deleteCreation(id)
+                        activePreviewCreation = null
+                    }
                 )
             }
         }

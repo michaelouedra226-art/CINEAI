@@ -58,7 +58,10 @@ enum class AgnesIcon {
     PLUS,
     SEARCH,
     FILTER,
-    LOGS
+    LOGS,
+    PLAY,
+    PAUSE,
+    SHARE
 }
 
 @Composable
@@ -123,6 +126,9 @@ fun AgnesSvgIcon(
                 AgnesIcon.SEARCH -> drawSearch(tint, stroke)
                 AgnesIcon.FILTER -> drawFilter(tint, stroke)
                 AgnesIcon.LOGS -> drawLogs(tint, stroke)
+                AgnesIcon.PLAY -> drawPlay(tint, stroke)
+                AgnesIcon.PAUSE -> drawPause(tint, stroke)
+                AgnesIcon.SHARE -> drawShare(tint, stroke)
             }
         }
     }
@@ -490,3 +496,40 @@ private fun DrawScope.drawLogs(color: Color, stroke: Stroke) {
     drawPath(prompt, color, style = stroke)
     drawLine(color, Offset(w * 0.52f, h * 0.62f), Offset(w * 0.70f, h * 0.62f), strokeWidth = stroke.width)
 }
+
+private fun DrawScope.drawPlay(color: Color, stroke: Stroke) {
+    val w = size.width
+    val h = size.height
+    val triangle = Path().apply {
+        moveTo(w * 0.35f, h * 0.25f)
+        lineTo(w * 0.75f, h * 0.50f)
+        lineTo(w * 0.35f, h * 0.75f)
+        close()
+    }
+    drawPath(triangle, color, style = stroke)
+}
+
+private fun DrawScope.drawPause(color: Color, stroke: Stroke) {
+    val w = size.width
+    val h = size.height
+    drawLine(color, Offset(w * 0.36f, h * 0.26f), Offset(w * 0.36f, h * 0.74f), strokeWidth = stroke.width)
+    drawLine(color, Offset(w * 0.64f, h * 0.26f), Offset(w * 0.64f, h * 0.74f), strokeWidth = stroke.width)
+}
+
+private fun DrawScope.drawShare(color: Color, stroke: Stroke) {
+    val w = size.width
+    val h = size.height
+    // Node 1 (right top), Node 2 (left center), Node 3 (right bottom)
+    val p1 = Offset(w * 0.75f, h * 0.28f)
+    val p2 = Offset(w * 0.28f, h * 0.50f)
+    val p3 = Offset(w * 0.75f, h * 0.72f)
+    val r = w * 0.11f
+
+    drawLine(color, p2, p1, strokeWidth = stroke.width)
+    drawLine(color, p2, p3, strokeWidth = stroke.width)
+
+    drawCircle(color, radius = r, center = p1, style = stroke)
+    drawCircle(color, radius = r, center = p2, style = stroke)
+    drawCircle(color, radius = r, center = p3, style = stroke)
+}
+

@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.model.CreationEntity
 import com.example.data.model.FilmEntity
 import com.example.data.model.SceneItem
 import com.example.data.repository.AgnesRepository
@@ -56,6 +57,7 @@ import com.example.ui.components.AgnesInteractiveCard
 import com.example.ui.components.AgnesPrimaryButton
 import com.example.ui.components.AgnesShimmerProgressBar
 import com.example.ui.components.AgnesUploadZone
+import com.example.ui.components.MediaViewerModal
 import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
@@ -74,6 +76,7 @@ fun FilmScreen(
 ) {
     val context = LocalContext.current
     var showCancelDialog by remember { mutableStateOf(false) }
+    var selectedSceneForPreview by remember { mutableStateOf<SceneItem?>(null) }
 
     // Formulaire de configuration Film
     var filmTitle by remember { mutableStateOf("") }
@@ -137,6 +140,25 @@ fun FilmScreen(
             },
             containerColor = Color(0xFF1E1E28),
             shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    if (selectedSceneForPreview != null) {
+        val sc = selectedSceneForPreview!!
+        val isVideo = !sc.videoUrl.isNullOrBlank()
+        val creationObj = CreationEntity(
+            id = "scene_${sc.number}",
+            type = if (isVideo) "video" else "image",
+            prompt = sc.video_prompt.ifBlank { sc.image_prompt },
+            model = if (isVideo) "agnes-video-v2.0" else "agnes-image-2.1-flash",
+            resultUrl = sc.videoUrl,
+            thumbnail = sc.keyframe,
+            status = sc.status
+        )
+        MediaViewerModal(
+            creation = creationObj,
+            film = null,
+            onDismiss = { selectedSceneForPreview = null }
         )
     }
 
@@ -298,7 +320,13 @@ fun FilmScreen(
 
                     AgnesInteractiveCard(
                         modifier = Modifier.fillMaxWidth(),
-                        isStalled = isStalled
+                        isStalled = isStalled,
+                        onClick = {
+                            if (!scene.keyframe.isNullOrBlank() || !scene.videoUrl.isNullOrBlank()) {
+                                triggerHapticFeedback(context)
+                                selectedSceneForPreview = scene
+                            }
+                        }
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
