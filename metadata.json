@@ -1,0 +1,6 @@
+{
+  "name": "Agnes Studio",
+  "description": "Studio complet de génération d'images, vidéos et réalisation de films IA avec rate-limiting et persistance locale.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
