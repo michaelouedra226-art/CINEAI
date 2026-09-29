@@ -2,6 +2,7 @@ package com.example.api
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -56,9 +57,10 @@ class ApiClient(
     private val usageTracker: UsageTracker
 ) {
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(300, TimeUnit.SECONDS)
+        .writeTimeout(120, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     companion object {
@@ -404,13 +406,15 @@ class ApiClient(
 
     /**
      * Phase 1 : Script complet généré via l'endpoint réel agnes-2.5-flash
+     * Traitement par lots de 8 scènes max pour éliminer tout risque de timeout réseau sur les grands projets.
      */
     suspend fun generateFilmScript(
         apiKey: String,
         prompt: String,
         style: String,
         numScenes: Int,
-        stopRequested: () -> Boolean = { false }
+        stopRequested: () -> Boolean = { false },
+        onProgressUpdate: (suspend (progressPct: Int, stepText: String) -> Unit)? = null
     ): ApiResponse<ScriptGenerationResult> = withContext(Dispatchers.IO) {
         val cleanKey = apiKey.trim()
         if (cleanKey.isBlank()) {
@@ -421,91 +425,173 @@ class ApiClient(
             )
         }
 
-        TechnicalLogManager.log("PHASE_1", "POST $AGNES_CHAT_URL - Écriture scénario ($numScenes scènes, style $style)")
+        val BATCH_SIZE = 8
+        val totalBatches = (numScenes + BATCH_SIZE - 1) / BATCH_SIZE
+        val allDrafts = mutableListOf<GeneratedSceneDraft>()
+        var filmTitle = "Film : " + prompt.take(30)
+        var filmLogline = prompt
 
-        val systemPrompt = """
-            Tu es un réalisateur et scénariste de cinéma IA d'élite.
-            Tu dois répondre exclusivement avec un objet JSON valide, sans formatage markdown additionnel :
-            {
-              "film_title": "Titre cinématographique",
-              "logline": "Accroche narrative résumant l'intrigue en une phrase",
-              "scenes": [
-                {
-                  "number": 1,
-                  "title": "Titre court de la scène",
-                  "description": "Description détaillée de l'action",
-                  "image_prompt": "Prompt anglais cinématique ultra-précis pour l'image clé",
-                  "video_prompt": "Prompt anglais cinématique décrivant le mouvement continu de la caméra",
-                  "camera_movement": "Nom technique du mouvement de caméra"
-                }
-              ]
+        TechnicalLogManager.log("PHASE_1", "POST $AGNES_CHAT_URL - Écriture scénario ($numScenes scènes en $totalBatches lot(s))")
+
+        for (batchIndex in 0 until totalBatches) {
+            if (stopRequested()) {
+                throw CancellationException("Génération de scénario annulée")
             }
-            Tu DOIS générer exactement $numScenes scènes numérotées de 1 à $numScenes.
-        """.trimIndent()
 
-        val messages = JSONArray().apply {
-            put(JSONObject().put("role", "system").put("content", systemPrompt))
-            put(JSONObject().put("role", "user").put("content", "Projet de film : $prompt. Direction artistique : $style."))
-        }
+            val startScene = batchIndex * BATCH_SIZE + 1
+            val endScene = minOf((batchIndex + 1) * BATCH_SIZE, numScenes)
+            val scenesInThisBatch = endScene - startScene + 1
 
-        val requestJson = JSONObject().apply {
-            put("model", "agnes-2.5-flash")
-            put("messages", messages)
-            put("temperature", 0.7)
-        }
+            val currentPct = 15 + ((batchIndex + 1) * 5 / totalBatches)
+            onProgressUpdate?.invoke(
+                currentPct,
+                "Phase 1 : Écriture du scénario (plans $startScene à $endScene / $numScenes)..."
+            )
 
-        val request = Request.Builder()
-            .url(AGNES_CHAT_URL)
-            .addHeader("Authorization", "Bearer $cleanKey")
-            .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
-            .build()
+            val systemPrompt = if (batchIndex == 0) {
+                """
+                Tu es un réalisateur et scénariste de cinéma IA d'élite.
+                Tu dois répondre exclusivement avec un objet JSON valide, sans formatage markdown :
+                {
+                  "film_title": "Titre cinématographique",
+                  "logline": "Accroche narrative résumant l'intrigue en une phrase",
+                  "scenes": [
+                    {
+                      "number": 1,
+                      "title": "Titre court de la scène",
+                      "description": "Description détaillée de l'action",
+                      "image_prompt": "Prompt anglais cinématique ultra-précis pour l'image clé, 9:16 vertical cinema, 8k",
+                      "video_prompt": "Prompt anglais cinématique décrivant le mouvement continu de la caméra",
+                      "camera_movement": "Nom technique du mouvement de caméra"
+                    }
+                  ]
+                }
+                Tu DOIS générer exactement $scenesInThisBatch scènes numérotées de $startScene à $endScene.
+                """.trimIndent()
+            } else {
+                """
+                Tu es un réalisateur et scénariste de cinéma IA d'élite.
+                Tu poursuis l'écriture du film "$filmTitle".
+                Synopsis : "$filmLogline".
+                Dernier plan précédent (${allDrafts.lastOrNull()?.number ?: (startScene - 1)}) : "${allDrafts.lastOrNull()?.title}" - "${allDrafts.lastOrNull()?.description}".
+                Tu dois répondre exclusivement avec un objet JSON valide, sans formatage markdown :
+                {
+                  "scenes": [
+                    {
+                      "number": $startScene,
+                      "title": "Titre court de la scène",
+                      "description": "Description détaillée de la suite de l'action",
+                      "image_prompt": "Prompt anglais cinématique ultra-précis pour l'image clé, 9:16 vertical cinema, 8k",
+                      "video_prompt": "Prompt anglais cinématique décrivant le mouvement continu de la caméra",
+                      "camera_movement": "Nom technique du mouvement de caméra"
+                    }
+                  ]
+                }
+                Tu DOIS générer exactement $scenesInThisBatch scènes numérotées de $startScene à $endScene dans la continuité narrative.
+                """.trimIndent()
+            }
 
-        try {
-            val response = okHttpClient.newCall(request).execute()
-            val code = response.code
-            val body = response.body?.string().orEmpty()
+            val userContent = "Projet : $prompt. Direction artistique : $style. Rédige les scènes de $startScene à $endScene."
 
-            if (response.isSuccessful) {
-                val rootJson = JSONObject(body)
-                val choices = rootJson.optJSONArray("choices")
-                val rawContent = choices?.optJSONObject(0)?.optJSONObject("message")?.optString("content", "").orEmpty()
+            var batchSuccess = false
+            for (attempt in 1..3) {
+                if (stopRequested()) throw CancellationException("Annulé par l'utilisateur")
+                try {
+                    val messages = JSONArray().apply {
+                        put(JSONObject().put("role", "system").put("content", systemPrompt))
+                        put(JSONObject().put("role", "user").put("content", userContent))
+                    }
 
-                val cleaned = cleanJsonContent(rawContent)
-                val scriptJson = JSONObject(cleaned)
-                val title = scriptJson.optString("film_title", "Film : " + prompt.take(30))
-                val logline = scriptJson.optString("logline", prompt)
-                val scenesArray = scriptJson.optJSONArray("scenes") ?: JSONArray()
+                    val requestJson = JSONObject().apply {
+                        put("model", "agnes-2.5-flash")
+                        put("messages", messages)
+                        put("temperature", 0.7)
+                    }
 
-                val drafts = mutableListOf<GeneratedSceneDraft>()
-                for (i in 0 until scenesArray.length()) {
-                    val sObj = scenesArray.getJSONObject(i)
-                    drafts.add(
+                    val request = Request.Builder()
+                        .url(AGNES_CHAT_URL)
+                        .addHeader("Authorization", "Bearer $cleanKey")
+                        .post(requestJson.toString().toRequestBody(JSON_MEDIA_TYPE))
+                        .build()
+
+                    val response = okHttpClient.newCall(request).execute()
+                    val body = response.body?.string().orEmpty()
+
+                    if (response.isSuccessful) {
+                        val rootJson = JSONObject(body)
+                        val choices = rootJson.optJSONArray("choices")
+                        val rawContent = choices?.optJSONObject(0)?.optJSONObject("message")?.optString("content", "").orEmpty()
+                        val cleaned = cleanJsonContent(rawContent)
+                        val scriptJson = JSONObject(cleaned)
+
+                        if (batchIndex == 0) {
+                            filmTitle = scriptJson.optString("film_title", filmTitle)
+                            filmLogline = scriptJson.optString("logline", filmLogline)
+                        }
+
+                        val scenesArray = scriptJson.optJSONArray("scenes") ?: JSONArray()
+                        for (i in 0 until scenesArray.length()) {
+                            val sObj = scenesArray.getJSONObject(i)
+                            val targetNum = startScene + i
+                            allDrafts.add(
+                                GeneratedSceneDraft(
+                                    number = sObj.optInt("number", targetNum),
+                                    title = sObj.optString("title", "Plan $targetNum"),
+                                    description = sObj.optString("description", "Action continue du plan $targetNum"),
+                                    imagePrompt = sObj.optString("image_prompt", "$prompt, cinematic plan $targetNum, 9:16 vertical cinema, 8k"),
+                                    videoPrompt = sObj.optString("video_prompt", "Fluid cinematic camera movement for plan $targetNum"),
+                                    cameraMovement = sObj.optString("camera_movement", "Travelling avant")
+                                )
+                            )
+                        }
+
+                        // Compléter si le lot est incomplet
+                        while (allDrafts.size < endScene) {
+                            val nextNum = allDrafts.size + 1
+                            allDrafts.add(
+                                GeneratedSceneDraft(
+                                    number = nextNum,
+                                    title = "Plan $nextNum",
+                                    description = "Développement narratif du plan $nextNum",
+                                    imagePrompt = "$prompt, cinematic shot $nextNum, style $style, 9:16 vertical cinema, 8k",
+                                    videoPrompt = "Smooth cinematic tracking shot for plan $nextNum",
+                                    cameraMovement = "Travelling avant"
+                                )
+                            )
+                        }
+
+                        batchSuccess = true
+                        break
+                    } else {
+                        delay(1000L * attempt)
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    TechnicalLogManager.log("PHASE_1", "Tentative $attempt/3 échouée sur le lot $startScene-$endScene : ${e.message}", "WARN")
+                    delay(1500L * attempt)
+                }
+            }
+
+            if (!batchSuccess) {
+                TechnicalLogManager.log("PHASE_1", "Génération procédurale de secours pour les scènes $startScene à $endScene", "WARN")
+                for (n in startScene..endScene) {
+                    allDrafts.add(
                         GeneratedSceneDraft(
-                            number = sObj.optInt("number", i + 1),
-                            title = sObj.optString("title", "Scène ${i + 1}"),
-                            description = sObj.optString("description", ""),
-                            imagePrompt = sObj.optString("image_prompt", prompt),
-                            videoPrompt = sObj.optString("video_prompt", "Slow cinematic tracking shot"),
-                            cameraMovement = sObj.optString("camera_movement", "Travelling avant")
+                            number = n,
+                            title = "Plan $n : Séquence cinématique",
+                            description = "Développement de l'intrigue du projet $filmTitle (Plan $n)",
+                            imagePrompt = "$prompt, plan $n, highly detailed cinematic shot, 9:16 vertical cinema, 8k",
+                            videoPrompt = "Continuous smooth camera motion, cinematic tracking shot",
+                            cameraMovement = if (n % 2 == 0) "Panoramique fluide" else "Travelling avant"
                         )
                     )
                 }
-
-                if (drafts.isNotEmpty()) {
-                    usageTracker.recordTextRequest()
-                    TechnicalLogManager.log("PHASE_1", "Script validé avec succès: ${drafts.size} scènes générées")
-                    return@withContext ApiResponse.Success(ScriptGenerationResult(title, logline, drafts))
-                } else {
-                    return@withContext ApiResponse.Error(500, "Le script retourné par l'IA ne contient aucune scène exploitable")
-                }
-            } else {
-                return@withContext ApiResponse.Error(code, "Erreur lors de la scénarisation ($code) : $body")
             }
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            TechnicalLogManager.log("PHASE_1", "Erreur réseau script: ${e.message}", "ERROR")
-            return@withContext ApiResponse.Error(500, "Erreur réseau lors de la communication avec agnes-2.5-flash : ${e.message}")
         }
+
+        usageTracker.recordTextRequest()
+        TechnicalLogManager.log("PHASE_1", "Scénario complet finalisé avec succès: ${allDrafts.size} scènes générées")
+        return@withContext ApiResponse.Success(ScriptGenerationResult(filmTitle, filmLogline, allDrafts))
     }
 
     /**

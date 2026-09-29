@@ -55,7 +55,7 @@ class AgnesRepository(
         )
 
         fun calculateBreakdown(requestedSeconds: Double, manualScenes: Int?): FilmBreakdown {
-            if (manualScenes != null && manualScenes >= 2) {
+            if (manualScenes != null && manualScenes >= 1) {
                 val targetPerScene = requestedSeconds / manualScenes
                 val closest = ALLOWED_FRAMES.minByOrNull { kotlin.math.abs(it.second - targetPerScene) } ?: ALLOWED_FRAMES[1]
                 return FilmBreakdown(
@@ -66,7 +66,7 @@ class AgnesRepository(
                 )
             } else {
                 val idealSec = 5.042
-                val computedScenes = (requestedSeconds / idealSec).toInt().coerceIn(2, 50)
+                val computedScenes = (requestedSeconds / idealSec).toInt().coerceIn(2, 250)
                 return FilmBreakdown(
                     numScenes = computedScenes,
                     framesPerScene = 121,
@@ -392,14 +392,17 @@ class AgnesRepository(
             finalLogline = prompt
             onSceneUpdate?.invoke(sceneItems, 18, "Découpage validé, préparation de la production...")
         } else {
-            onSceneUpdate?.invoke(emptyList(), 15, "Phase 1 : Écriture du scénario (agnes-2.5-flash)...")
+            onSceneUpdate?.invoke(emptyList(), 15, "Phase 1 : Écriture du scénario ($numScenes plans)...")
 
             val scriptRes = apiClient.generateFilmScript(
                 apiKey = settings.apiKey,
                 prompt = prompt,
                 style = filmStyle,
                 numScenes = numScenes,
-                stopRequested = stopRequested
+                stopRequested = stopRequested,
+                onProgressUpdate = { pct, txt ->
+                    onSceneUpdate?.invoke(emptyList(), pct, txt)
+                }
             )
 
             if (scriptRes !is ApiResponse.Success) {

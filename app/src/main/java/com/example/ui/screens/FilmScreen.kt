@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
@@ -47,8 +48,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -806,8 +810,15 @@ fun FilmScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = "2. Durée cible", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                val durationText = if (requestedDurationSeconds >= 60) {
+                    val m = (requestedDurationSeconds / 60).toInt()
+                    val s = (requestedDurationSeconds % 60).toInt()
+                    if (s > 0) "${m}m ${s}s" else "${m} minutes"
+                } else {
+                    "${requestedDurationSeconds.toInt()} secondes"
+                }
                 Text(
-                    text = "${requestedDurationSeconds.toInt()} secondes",
+                    text = durationText,
                     color = Color(0xFFA78BFA),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
@@ -816,8 +827,8 @@ fun FilmScreen(
             Slider(
                 value = requestedDurationSeconds.toFloat(),
                 onValueChange = { requestedDurationSeconds = it.toDouble() },
-                valueRange = 10f..600f,
-                steps = 58,
+                valueRange = 10f..3600f,
+                steps = 71,
                 colors = SliderDefaults.colors(
                     thumbColor = Color(0xFF8B5CF6),
                     activeTrackColor = Color(0xFF7C3AED),
@@ -827,7 +838,7 @@ fun FilmScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 3. Nombre de scènes : Sélecteur clair avec modes Automatique et Personnalisé (Section 4 du CDC)
+            // 3. Nombre de scènes : Sélection libre sans limite arbitraire
             Text(text = "3. Nombre de scènes", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -872,7 +883,7 @@ fun FilmScreen(
                 }
             }
 
-            // Commandes du mode personnalisé (Section 4.2 : boutons - et +, valeurs suggérées 3, 5, 8, 10, 12)
+            // Commandes du mode personnalisé (Saisie directe libre de 1 à 250+ scènes)
             if (!isAutoScenesMode) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
@@ -880,11 +891,11 @@ fun FilmScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(text = "Ajustement précis :", color = Color(0xFFBBBBD0), fontSize = 12.sp)
+                    Text(text = "Nombre exact de plans :", color = Color(0xFFBBBBD0), fontSize = 12.sp)
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Box(
                             modifier = Modifier
@@ -900,11 +911,33 @@ fun FilmScreen(
                             Text("−", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        Text(
-                            text = "$manualScenesCount",
-                            color = Color(0xFFA78BFA),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                        OutlinedTextField(
+                            value = manualScenesCount.toString(),
+                            onValueChange = { str ->
+                                val filtered = str.filter { it.isDigit() }
+                                val parsed = filtered.toIntOrNull()
+                                if (parsed != null && parsed in 1..250) {
+                                    manualScenesCount = parsed
+                                } else if (filtered.isBlank()) {
+                                    manualScenesCount = 1
+                                }
+                            },
+                            modifier = Modifier.width(68.dp),
+                            textStyle = TextStyle(
+                                color = Color(0xFFA78BFA),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            ),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF13131A),
+                                unfocusedContainerColor = Color(0xFF13131A),
+                                focusedBorderColor = Color(0xFF8B5CF6),
+                                unfocusedBorderColor = Color(0xFF282836)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
                         )
 
                         Box(
@@ -914,7 +947,7 @@ fun FilmScreen(
                                 .background(Color(0xFF282836))
                                 .clickable {
                                     triggerHapticFeedback(context)
-                                    if (manualScenesCount < 20) manualScenesCount++
+                                    if (manualScenesCount < 250) manualScenesCount++
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -923,27 +956,37 @@ fun FilmScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Suggestions rapides : 3, 5, 8, 10, 12
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(3, 5, 8, 10, 12).forEach { n ->
+                // Suggestions rapides étendues (sans plafond à 20)
+                Text(text = "Suggestions rapides :", color = Color(0xFF71717A), fontSize = 11.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listOf(3, 5, 8, 12, 20, 30, 50, 100)) { n ->
                         val isSelected = manualScenesCount == n
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) Color(0xFF7C3AED) else Color(0xFF1C1C25))
                                 .border(1.dp, if (isSelected) Color(0xFFA78BFA) else Color(0xFF2E2E3E), RoundedCornerShape(8.dp))
-                                .clickable {
-                                    triggerHapticFeedback(context)
-                                    manualScenesCount = n
-                                }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                manualScenesCount = n
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(text = "$n plans", color = if (isSelected) Color.White else Color(0xFFBBBBCC), fontSize = 11.sp)
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "L'IA découpe le scénario en lots continus sans bloquer et enregistre chaque plan en base locale au fur et à mesure.",
+                    color = Color(0xFF71717A),
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
