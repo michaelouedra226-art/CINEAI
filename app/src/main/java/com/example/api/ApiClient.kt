@@ -349,7 +349,8 @@ class ApiClient(
                     val json = JSONObject(body)
                     val status = json.optString("status", "processing")
                     val progress = json.optInt("progress", if (status == "completed") 100 else 0)
-                    val videoUrl = json.optString("url", json.optJSONObject("metadata")?.optString("url", null))
+                    val directUrl = json.optString("url", "")
+                    val videoUrl = if (directUrl.isNotBlank()) directUrl else json.optJSONObject("metadata")?.optString("url", "").orEmpty()
 
                     // Détection de blocage (StallDetector : 6 polls identiques)
                     if (progress == lastProgress && status == lastStatus && status != "completed") {
