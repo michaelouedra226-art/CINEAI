@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +31,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -90,6 +92,7 @@ fun FilmScreen(
     onCancelGeneration: () -> Unit,
     onPrepareDrafts: ((prompt: String, style: String, numScenes: Int, (String, List<SceneItem>) -> Unit) -> Unit)? = null,
     onSelectFilm: ((FilmEntity) -> Unit)? = null,
+    onResumeFilm: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -621,6 +624,57 @@ fun FilmScreen(
                 fontSize = 12.sp
             )
 
+            // Bannière de reprise si un projet a été interrompu
+            val pendingFilm = recentFilms.firstOrNull { it.status in listOf("partial", "failed", "processing") }
+            if (pendingFilm != null && onResumeFilm != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF1E172E),
+                    border = BorderStroke(1.dp, Color(0xFF7C3AED))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Projet interrompu : ${pendingFilm.title}",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "${pendingFilm.getCompletedScenesCount()}/${pendingFilm.numScenes} plans enregistrés. Reprise disponible.",
+                                color = Color(0xFFA78BFA),
+                                fontSize = 11.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF7C3AED))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    onResumeFilm(pendingFilm.id)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Continuer",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
             // ═══════════════════════════════════════════════════════
             // PROJETS DE FILM RÉCENTS (Vignettes cinéma & statut)
             // ═══════════════════════════════════════════════════════
@@ -672,6 +726,7 @@ fun FilmScreen(
                             film = film,
                             width = 135.dp,
                             height = 200.dp,
+                            onResume = if (onResumeFilm != null) { { onResumeFilm(film.id) } } else null,
                             onClick = {
                                 if (onSelectFilm != null) {
                                     onSelectFilm(film)
@@ -737,54 +792,10 @@ fun FilmScreen(
                 onClick = {
                     hasStartImage = !hasStartImage
                     if (hasStartImage && startImageUrl.isBlank()) {
-                        startImageUrl = "android.resource://com.example/drawable/img_film_nebula"
+                        startImageUrl = "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=720&q=80"
                     }
                 }
             )
-
-            // Vignettes prédéfinies rapides pour l'image de départ
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val presets = listOf(
-                    Triple("Nébuleuse", "android.resource://com.example/drawable/img_film_nebula", "Sci-Fi"),
-                    Triple("Cyberpunk", "android.resource://com.example/drawable/img_film_cyberpunk", "Néo-Noir"),
-                    Triple("Nature", "android.resource://com.example/drawable/img_film_nature", "Wild")
-                )
-                presets.forEach { (label, uri, category) ->
-                    val isChosen = hasStartImage && startImageUrl == uri
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isChosen) Color(0xFF3B1E6D) else Color(0xFF161622))
-                            .border(1.dp, if (isChosen) Color(0xFFA78BFA) else Color(0xFF28283A), RoundedCornerShape(8.dp))
-                            .clickable {
-                                triggerHapticFeedback(context)
-                                hasStartImage = true
-                                startImageUrl = uri
-                                if (filmTitle.isBlank()) {
-                                    filmTitle = when (label) {
-                                        "Nébuleuse" -> "Les Chroniques de Nébula"
-                                        "Cyberpunk" -> "Cyberpunk 2099"
-                                        else -> "Wild Odyssey"
-                                    }
-                                }
-                            }
-                            .padding(vertical = 7.dp, horizontal = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "✦ $label",
-                            color = if (isChosen) Color.White else Color(0xFFBBBBD0),
-                            fontSize = 11.sp,
-                            fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                }
-            }
 
             Spacer(modifier = Modifier.height(16.dp))
 

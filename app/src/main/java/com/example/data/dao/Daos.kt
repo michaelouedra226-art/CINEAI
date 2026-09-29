@@ -58,6 +58,9 @@ interface FilmDao {
     @Query("SELECT * FROM films ORDER BY createdAt DESC")
     fun getAllFilms(): Flow<List<FilmEntity>>
 
+    @Query("SELECT * FROM films ORDER BY createdAt DESC")
+    suspend fun getAllFilmsDirect(): List<FilmEntity>
+
     @Query("SELECT * FROM films WHERE id = :id")
     fun getFilmById(id: String): Flow<FilmEntity?>
 

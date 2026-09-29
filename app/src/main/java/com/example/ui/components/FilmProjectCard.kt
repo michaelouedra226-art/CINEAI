@@ -256,7 +256,7 @@ fun FilmProjectCard(
                     ) {
                         AgnesSvgIcon(icon = AgnesIcon.PLAY, tint = Color.White, size = 10.dp)
                     }
-                } else if (isPartial && onResume != null) {
+                } else if ((isPartial || isProc || isFailed) && onResume != null) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))

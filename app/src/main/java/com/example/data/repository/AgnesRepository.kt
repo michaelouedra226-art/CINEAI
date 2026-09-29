@@ -89,93 +89,31 @@ class AgnesRepository(
             TechnicalLogManager.log("INIT", "Initialisation des réglages Agnes Studio")
         }
 
-        // Initialisation des projets de films vitrines avec vignettes si la table est vide
-        val filmCount = filmDao.getFilmCount()
-        if (filmCount == 0) {
-            val nebulaThumb = "android.resource://com.example/drawable/img_film_nebula"
-            val cyberpunkThumb = "android.resource://com.example/drawable/img_film_cyberpunk"
-            val natureThumb = "android.resource://com.example/drawable/img_film_nature"
+        // Nettoyage impératif de toute donnée de démonstration antérieure
+        filmDao.deleteById("film_showcase_nebula")
+        filmDao.deleteById("film_showcase_cyberpunk")
+        filmDao.deleteById("film_showcase_nature")
 
-            val showcaseFilms = listOf(
-                FilmEntity(
-                    id = "film_showcase_nebula",
-                    title = "Les Chroniques de Nébula",
-                    logline = "À l'orée d'une faille cosmique inexplorée, l'équipage de l'Astraea découvre les vestiges d'une civilisation stellaire.",
-                    prompt = "Odyssée spatiale de science-fiction, nébuleuse cosmique aux teintes violettes et cyan, vaisseau spatial explorateur",
-                    startImage = nebulaThumb,
-                    status = "done",
-                    createdAt = System.currentTimeMillis() - 86400000L * 2,
-                    updatedAt = System.currentTimeMillis() - 86400000L * 2,
-                    requestedDuration = 25.0,
-                    duration = 25.2,
-                    numScenes = 5,
-                    framesPerScene = 121,
-                    durationPerScene = 5.042,
-                    filmStyle = "Cinématique",
-                    favorite = true,
-                    scenesJson = SceneItem.serializeList(
-                        listOf(
-                            SceneItem(1, "L'Approche du Rift", "Le croiseur approche de l'anneau stellaire luminescent.", "Vaisseau spatial naviguant vers une faille galactique violette", "Caméra travelling avant lent vers le rift", "Travelling avant", "done", keyframe = nebulaThumb),
-                            SceneItem(2, "Entrée en Résonance", "Ondes gravitationnelles déformant la lumière des étoiles.", "Nébuleuse aux reflets cyan et cristaux cosmiques flottants", "Rotation orbitale douce autour du vaisseau", "Panoramique", "done", keyframe = nebulaThumb),
-                            SceneItem(3, "Le Cœur de la Nébuleuse", "Des structures colossales réagissent aux scanners.", "Ruines extraterrestres géantes illuminées par les réacteurs", "Plongée vertigineuse sur les monolithes", "Plongée", "done", keyframe = nebulaThumb),
-                            SceneItem(4, "Le Premier Contact", "Un artefact émet une impulsion d'énergie pure.", "Artefact géométrique pulsant d'une lueur dorée", "Zoom avant dynamique sur le noyau d'énergie", "Zoom avant", "done", keyframe = nebulaThumb),
-                            SceneItem(5, "Le Saut Quantique", "L'Astraea s'élance à travers la brèche dimensionnelle.", "Vaisseau traversant un portail d'hyper-espace flamboyant", "Travelling arrière rapide avec traînée lumineuse", "Travelling arrière", "done", keyframe = nebulaThumb)
-                        )
-                    )
-                ),
-                FilmEntity(
-                    id = "film_showcase_cyberpunk",
-                    title = "Cyberpunk 2099 : Neon Rain",
-                    logline = "Dans les bas-fonds de Néo-Kyoto, un agent dissident traque un réseau clandestin d'androïdes conscients.",
-                    prompt = "Cyberpunk néo-noir, mégalopole pluvieuse nocturne, reflets néon magenta et bleu sur le bitume",
-                    startImage = cyberpunkThumb,
-                    status = "done",
-                    createdAt = System.currentTimeMillis() - 86400000L,
-                    updatedAt = System.currentTimeMillis() - 86400000L,
-                    requestedDuration = 20.0,
-                    duration = 20.1,
-                    numScenes = 4,
-                    framesPerScene = 121,
-                    durationPerScene = 5.042,
-                    filmStyle = "Film Noir",
-                    favorite = false,
-                    scenesJson = SceneItem.serializeList(
-                        listOf(
-                            SceneItem(1, "Pluie sur le Boulevard 4", "Ruelle sombre de néo-métropole sous une pluie torrentielle.", "Détective cyborg sous la pluie, néons holographiques géants", "Travelling au ras du sol avec reflets d'eau", "Travelling bas", "done", keyframe = cyberpunkThumb),
-                            SceneItem(2, "Le Marché Obscur", "Allée bondée de boutiques cybernétiques aux lueurs incandescentes.", "Foule éclectique sous des enseignes néon kanji multicolores", "Plan moyen traversant la foule", "Travelling latéral", "done", keyframe = cyberpunkThumb),
-                            SceneItem(3, "La Filature Virtuelle", "Interface neurale projetant des flux de données chiffrées.", "Silhouette mystérieuse disparaissant dans un conduit de vapeur", "Panoramique rapide vers le toit", "Panoramique", "done", keyframe = cyberpunkThumb),
-                            SceneItem(4, "Confrontation au Sommet", "Face-à-face au bord d'un gratte-ciel vertigineux surplombant la ville.", "Deux figures silencieuses face à l'horizon cybernétique brumeux", "Plan large cinématographique avec vue plongeante", "Plan large", "done", keyframe = cyberpunkThumb)
-                        )
-                    )
-                ),
-                FilmEntity(
-                    id = "film_showcase_nature",
-                    title = "Wild Odyssey : L'Éveil Sauvage",
-                    logline = "Au cœur des forêts primordiales d'Asie du Sud-Est, le seigneur de la brume entreprend sa traversée à l'aube.",
-                    prompt = "Documentaire animalier cinématographique 8k, tigre majestueux dans la forêt de bambou brumeuse",
-                    startImage = natureThumb,
-                    status = "done",
-                    createdAt = System.currentTimeMillis() - 3600000L * 4,
-                    updatedAt = System.currentTimeMillis() - 3600000L * 4,
-                    requestedDuration = 15.0,
-                    duration = 15.1,
-                    numScenes = 3,
-                    framesPerScene = 121,
-                    durationPerScene = 5.042,
-                    filmStyle = "Documentaire",
-                    favorite = true,
-                    scenesJson = SceneItem.serializeList(
-                        listOf(
-                            SceneItem(1, "La Brume du Matin", "Rayons de soleil filtrant à travers les hautes canopées de bambou.", "Forêt tropicale mystique baignée de rayons dorés matinaux", "Travelling lent à travers les tiges de bambou", "Travelling avant", "done", keyframe = natureThumb),
-                            SceneItem(2, "L'Apparition du Prédateur", "Le tigre avance d'un pas feutré dans les herbes hautes perlées de rosée.", "Gros plan sur le regard perçant du tigre royal", "Mouvement fluide à hauteur d'yeux", "Plan serré", "done", keyframe = natureThumb),
-                            SceneItem(3, "Le Gardien du Sanctuaire", "Le félin s'arrête sur une falaise surplombant la vallée verdoyante.", "Panorama spectaculaire de la jungle s'étendant à perte de vue", "Élévation majestueuse de caméra vers le ciel", "Grue ascendante", "done", keyframe = natureThumb)
-                        )
+        // Récupération des films interrompus lors d'une session fermée/arrière-plan
+        val allFilms = filmDao.getAllFilmsDirect()
+        for (film in allFilms) {
+            if (film.status == "processing") {
+                val scenes = SceneItem.parseList(film.scenesJson)
+                val sanitizedScenes = scenes.map { sc ->
+                    if (sc.status == "processing" || sc.status == "stalled") {
+                        if (sc.videoUrl.isNullOrBlank()) sc.copy(status = "pending", progressText = "En attente de reprise")
+                        else sc.copy(status = "done", progressText = "Plan finalisé")
+                    } else sc
+                }
+                filmDao.update(
+                    film.copy(
+                        status = "partial",
+                        failureReason = "Production interrompue lors de la déconnexion",
+                        scenesJson = SceneItem.serializeList(sanitizedScenes)
                     )
                 )
-            )
-
-            filmDao.insertAll(showcaseFilms)
-            TechnicalLogManager.log("INIT", "3 projets de films de démonstration initialisés avec vignettes")
+                TechnicalLogManager.log("INIT", "Film '${film.title}' récupéré en statut Partiel pour reprise")
+            }
         }
     }
 
@@ -203,6 +141,10 @@ class AgnesRepository(
     suspend fun deleteFilm(id: String) = withContext(Dispatchers.IO) {
         filmDao.deleteById(id)
         TechnicalLogManager.log("FILM", "Film supprimé de la bibliothèque: $id")
+    }
+
+    suspend fun getFilmDirect(id: String): FilmEntity? = withContext(Dispatchers.IO) {
+        filmDao.getFilmByIdDirect(id)
     }
 
     /**

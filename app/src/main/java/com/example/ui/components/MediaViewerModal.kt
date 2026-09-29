@@ -462,18 +462,23 @@ fun ImageViewerWithZoom(imageUrl: String) {
 
 /**
  * Lecteur vidéo natif intégrant VideoView avec commandes Play/Pause, Replay et Scrubbing.
+ * Rechargement dynamique garanti lors du changement d'URL de scène.
  */
 @Composable
-fun VideoPlayerComponent(videoUrl: String) {
+fun VideoPlayerComponent(
+    videoUrl: String,
+    fallbackImageUrl: String? = null
+) {
     val context = LocalContext.current
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentPositionMs by remember { mutableIntStateOf(0) }
-    var durationMs by remember { mutableIntStateOf(0) }
-    var isBuffering by remember { mutableStateOf(true) }
+    var isPlaying by remember(videoUrl) { mutableStateOf(false) }
+    var currentPositionMs by remember(videoUrl) { mutableIntStateOf(0) }
+    var durationMs by remember(videoUrl) { mutableIntStateOf(0) }
+    var isBuffering by remember(videoUrl) { mutableStateOf(true) }
+    var hasError by remember(videoUrl) { mutableStateOf(false) }
     var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
 
     // Synchronisation périodique de la progression vidéo
-    LaunchedEffect(isPlaying) {
+    LaunchedEffect(isPlaying, videoUrl) {
         while (isPlaying) {
             videoViewRef?.let { vv ->
                 if (vv.isPlaying) {
@@ -485,7 +490,7 @@ fun VideoPlayerComponent(videoUrl: String) {
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(videoUrl) {
         onDispose {
             videoViewRef?.stopPlayback()
         }
@@ -497,33 +502,45 @@ fun VideoPlayerComponent(videoUrl: String) {
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        AndroidView(
-            factory = { ctx ->
-                VideoView(ctx).apply {
-                    setVideoURI(Uri.parse(videoUrl))
-                    setOnPreparedListener { mp ->
-                        isBuffering = false
-                        durationMs = mp.duration
-                        mp.isLooping = true
-                        start()
-                        isPlaying = true
-                    }
-                    setOnErrorListener { _, _, _ ->
-                        isBuffering = false
-                        isPlaying = false
-                        true
-                    }
-                    setOnCompletionListener {
-                        isPlaying = false
-                    }
-                    videoViewRef = this
-                }
-            },
-            update = { vv ->
-                videoViewRef = vv
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+        if (!hasError) {
+            androidx.compose.runtime.key(videoUrl) {
+                AndroidView(
+                    factory = { ctx ->
+                        VideoView(ctx).apply {
+                            setVideoURI(Uri.parse(videoUrl))
+                            setOnPreparedListener { mp ->
+                                isBuffering = false
+                                durationMs = mp.duration
+                                mp.isLooping = true
+                                start()
+                                isPlaying = true
+                            }
+                            setOnErrorListener { _, _, _ ->
+                                isBuffering = false
+                                isPlaying = false
+                                hasError = true
+                                true
+                            }
+                            setOnCompletionListener {
+                                isPlaying = false
+                            }
+                            videoViewRef = this
+                        }
+                    },
+                    update = { vv ->
+                        videoViewRef = vv
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        } else {
+            // Repli sur l'image clé HD si la vidéo ne peut pas être lue
+            if (!fallbackImageUrl.isNullOrBlank()) {
+                ImageViewerWithZoom(imageUrl = fallbackImageUrl)
+            } else {
+                EmptyMediaState(message = "Format vidéo non décodable sur ce périphérique")
+            }
+        }
 
         // Indicateur de chargement / buffer
         if (isBuffering) {
@@ -712,12 +729,17 @@ fun FilmPlayerView(
             val videoUrl = activeScene?.videoUrl
             val keyframeUrl = activeScene?.keyframe
 
-            if (!videoUrl.isNullOrBlank()) {
-                VideoPlayerComponent(videoUrl = videoUrl)
-            } else if (!keyframeUrl.isNullOrBlank()) {
-                ImageViewerWithZoom(imageUrl = keyframeUrl)
-            } else {
-                EmptyMediaState(message = "Plan en cours de production...")
+            androidx.compose.runtime.key(selectedSceneIndex, videoUrl, keyframeUrl) {
+                if (!videoUrl.isNullOrBlank()) {
+                    VideoPlayerComponent(
+                        videoUrl = videoUrl,
+                        fallbackImageUrl = keyframeUrl
+                    )
+                } else if (!keyframeUrl.isNullOrBlank()) {
+                    ImageViewerWithZoom(imageUrl = keyframeUrl)
+                } else {
+                    EmptyMediaState(message = "Plan ${activeScene?.number ?: (selectedSceneIndex + 1)} en cours de production...")
+                }
             }
         }
 
@@ -869,6 +891,7 @@ fun FilmPlayerView(
                                 .clickable {
                                     triggerHapticFeedback(context)
                                     selectedSceneIndex = idx
+                                    showFullDecoupage = false
                                 }
                                 .padding(8.dp)
                         ) {

@@ -165,6 +165,9 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                         },
                         onSelectFilm = { film ->
                             activePreviewFilm = film
+                        },
+                        onResumeFilm = { id ->
+                            viewModel.resumeFilm(id)
                         }
                     )
                 }

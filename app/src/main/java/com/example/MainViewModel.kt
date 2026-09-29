@@ -366,11 +366,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
+        navigateTo(AgnesScreen.FILM)
         _isFilmGenerating.value = true
         filmStopRequested = false
         _filmProgress.value = 20
         _filmStepText.value = "Reprise de la production..."
         _filmElapsedSeconds.value = 0
+
+        // Préchargement immédiat de l'état des scènes
+        viewModelScope.launch {
+            val film = repository.getFilmDirect(filmId)
+            if (film != null) {
+                val scs = SceneItem.parseList(film.scenesJson)
+                _currentFilmScenes.value = scs
+                val doneCount = scs.count { it.status == "done" && !it.videoUrl.isNullOrBlank() }
+                val pct = if (scs.isNotEmpty()) (doneCount * 100 / scs.size).coerceAtLeast(20) else 20
+                _filmProgress.value = pct
+                _filmStepText.value = "Reprise à partir du plan ${doneCount + 1}/${scs.size}..."
+            }
+        }
 
         filmTimerJob?.cancel()
         filmTimerJob = viewModelScope.launch {
