@@ -55,7 +55,7 @@ jobs:
         run: |
           chmod +x ./gradlew
           if [ -f ./scripts/fix-executable-permissions.sh ]; then
-            ./scripts/fix-executable-permissions.sh
+            bash ./scripts/fix-executable-permissions.sh
           fi
 
       - name: Build debug APK
