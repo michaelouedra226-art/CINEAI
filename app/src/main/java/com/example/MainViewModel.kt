@@ -46,7 +46,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         queueDao = database.queueDao(),
         apiClient = apiClient,
         rateLimiter = rateLimiter,
-        usageTracker = usageTracker
+        usageTracker = usageTracker,
+        context = application
     )
 
     // Écran actif

@@ -1,5 +1,6 @@
 package com.example.data.repository
 
+import android.content.Context
 import com.example.api.ApiClient
 import com.example.api.ApiResponse
 import com.example.api.RateLimiter
@@ -16,6 +17,8 @@ import com.example.data.model.QueueItemEntity
 import com.example.data.model.SceneItem
 import com.example.data.model.SettingsEntity
 import com.example.data.model.UsageEntity
+import com.example.util.ImagePickerHelper
+import com.example.util.OfflineVideoManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -37,7 +40,8 @@ class AgnesRepository(
     private val queueDao: QueueDao,
     val apiClient: ApiClient,
     val rateLimiter: RateLimiter,
-    val usageTracker: UsageTracker
+    val usageTracker: UsageTracker,
+    val context: Context? = null
 ) {
     val allCreations: Flow<List<CreationEntity>> = creationDao.getAllCreations()
     val allFilms: Flow<List<FilmEntity>> = filmDao.getAllFilms()
@@ -271,11 +275,44 @@ class AgnesRepository(
         )
         queueDao.insert(queueItem)
 
+        // Si aucune image de départ n'est fournie (mode Texte -> Vidéo), on génère en amont
+        // une image clé cinématique haute définition (comme dans le mode Film qui réussit à 100%)
+        // afin de fournir un keyframe de départ robuste au moteur agnes-video-v2.0.
+        var effectiveStartImage: String? = null
+
+        if (!startImageUrl.isNullOrBlank()) {
+            effectiveStartImage = if (context != null) {
+                ImagePickerHelper.prepareImageForApi(context, startImageUrl)
+            } else {
+                startImageUrl
+            }
+        } else {
+            queueDao.update(queueItem.copy(status = "processing", progress = 5))
+            creationDao.updateStatus(creationId, "processing", 5, null, null, null)
+
+            val imgRes = apiClient.generateImage(
+                apiKey = settings.apiKey,
+                prompt = prompt,
+                style = "Cinématique",
+                size = "1K",
+                ratio = if (resolution.contains("9:16")) "9:16" else "16:9",
+                variations = 1,
+                model = "agnes-image-2.1-flash",
+                stopRequested = stopRequested
+            )
+
+            if (imgRes is ApiResponse.Success) {
+                val keyframeUrl = imgRes.data.urls.firstOrNull()
+                effectiveStartImage = keyframeUrl
+                creationDao.updateStatus(creationId, "processing", 10, null, keyframeUrl, null)
+            }
+        }
+
         val initRes = apiClient.initiateVideo(
             apiKey = settings.apiKey,
             profile = settings.rateLimitProfile,
             prompt = prompt,
-            startImageUrl = startImageUrl,
+            startImageUrl = effectiveStartImage,
             durationSeconds = durationSeconds,
             numFrames = numFrames,
             resolution = resolution,
@@ -313,38 +350,44 @@ class AgnesRepository(
 
                 when (pollRes) {
                     is ApiResponse.Success -> {
-                        val videoUrl = pollRes.data.url
+                        val videoUrl = pollRes.data.url.orEmpty()
+                        // Mise en cache locale automatique pour disponibilité 100% hors-ligne
+                        val offlinePath = if (context != null && videoUrl.isNotBlank()) {
+                            OfflineVideoManager.cacheVideo(context, videoUrl)
+                        } else null
+                        val finalResultUrl = offlinePath ?: videoUrl
+
                         queueDao.update(queueItem.copy(status = "done", progress = 100))
                         creationDao.updateStatus(
                             id = creationId,
                             status = "done",
                             progress = 100,
-                            resultUrl = videoUrl,
-                            thumbnail = startImageUrl ?: videoUrl,
+                            resultUrl = finalResultUrl,
+                            thumbnail = effectiveStartImage ?: finalResultUrl,
                             error = null
                         )
                         onDone?.invoke(true, null)
                     }
                     is ApiResponse.Error -> {
                         queueDao.update(queueItem.copy(status = "failed", progress = 0))
-                        creationDao.updateStatus(creationId, "failed", 0, null, startImageUrl, pollRes.message)
+                        creationDao.updateStatus(creationId, "failed", 0, null, effectiveStartImage, pollRes.message)
                         onDone?.invoke(false, pollRes.message)
                     }
                     is ApiResponse.Stalled -> {
                         queueDao.update(queueItem.copy(status = "stalled", progress = 0))
-                        creationDao.updateStatus(creationId, "stalled", 0, null, startImageUrl, pollRes.message)
+                        creationDao.updateStatus(creationId, "stalled", 0, null, effectiveStartImage, pollRes.message)
                         onDone?.invoke(false, pollRes.message)
                     }
                 }
             }
             is ApiResponse.Error -> {
                 queueDao.update(queueItem.copy(status = "failed", progress = 0))
-                creationDao.updateStatus(creationId, "failed", 0, null, startImageUrl, initRes.message)
+                creationDao.updateStatus(creationId, "failed", 0, null, effectiveStartImage, initRes.message)
                 onDone?.invoke(false, initRes.message)
             }
             is ApiResponse.Stalled -> {
                 queueDao.update(queueItem.copy(status = "stalled", progress = 0))
-                creationDao.updateStatus(creationId, "stalled", 0, null, startImageUrl, initRes.message)
+                creationDao.updateStatus(creationId, "stalled", 0, null, effectiveStartImage, initRes.message)
                 onDone?.invoke(false, initRes.message)
             }
         }
@@ -574,10 +617,14 @@ class AgnesRepository(
             }
 
             val finalVideoUrl = pollRes.data.url
+            val offlineVideoPath = if (context != null && !finalVideoUrl.isNullOrBlank()) {
+                OfflineVideoManager.cacheVideo(context, finalVideoUrl)
+            } else null
+            val resolvedVideoUrl = offlineVideoPath ?: finalVideoUrl
 
             sceneItems[i] = sc.copy(
                 status = "done",
-                videoUrl = finalVideoUrl,
+                videoUrl = resolvedVideoUrl,
                 progressText = "Plan finalisé"
             )
 
@@ -775,7 +822,12 @@ class AgnesRepository(
                     throw IllegalStateException("Échec rendu scène ${sc.number}: $err")
                 }
                 val finalVideoUrl = pollRes.data.url
-                sceneItems[i] = sc.copy(status = "done", videoUrl = finalVideoUrl, progressText = "Plan finalisé")
+                val offlineVideoPath = if (context != null && !finalVideoUrl.isNullOrBlank()) {
+                    OfflineVideoManager.cacheVideo(context, finalVideoUrl)
+                } else null
+                val resolvedVideoUrl = offlineVideoPath ?: finalVideoUrl
+
+                sceneItems[i] = sc.copy(status = "done", videoUrl = resolvedVideoUrl, progressText = "Plan finalisé")
                 filmDao.update(film.copy(scenesJson = SceneItem.serializeList(sceneItems)))
 
                 val pauseMs = if (settings.rateLimitProfile == "token") RateLimiter.VIDEO_PAUSE_MS_TOKEN else if (settings.rateLimitProfile == "enterprise") 0L else RateLimiter.VIDEO_PAUSE_MS_FREE

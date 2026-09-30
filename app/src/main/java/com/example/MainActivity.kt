@@ -130,6 +130,10 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                     VideosScreen(
                         queueItems = queueItems,
                         isGenerating = isVideoGenerating,
+                        recentVideos = allCreations.filter { it.type == "video" },
+                        onSelectCreation = { creation ->
+                            activePreviewCreation = creation
+                        },
                         onGenerateVideo = { prompt, mode, startImg, duration, resolution, numFrames ->
                             viewModel.generateVideo(prompt, mode, startImg, duration, resolution, numFrames)
                         }
@@ -139,6 +143,7 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                     FilmScreen(
                         currentFilm = allFilms.firstOrNull(),
                         recentFilms = allFilms,
+                        availableCreations = allCreations,
                         isGenerating = isFilmGenerating,
                         generationProgress = filmProgress,
                         currentStepText = filmStepText,

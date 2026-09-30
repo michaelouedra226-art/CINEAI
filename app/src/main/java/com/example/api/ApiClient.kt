@@ -230,12 +230,17 @@ class ApiClient(
 
         TechnicalLogManager.log("API_VID", "POST $AGNES_VIDEO_URL - Modèle: $model, Frames: $numFrames, Durée: ${durationSeconds}s")
 
+        val hasImages = !startImageUrl.isNullOrBlank() || !endImageUrl.isNullOrBlank()
         val extraBody = JSONObject().apply {
-            put("mode", "keyframes")
-            val imagesArray = JSONArray()
-            if (!startImageUrl.isNullOrBlank()) imagesArray.put(startImageUrl)
-            if (!endImageUrl.isNullOrBlank()) imagesArray.put(endImageUrl)
-            put("image", imagesArray)
+            if (hasImages) {
+                put("mode", "keyframes")
+                val imagesArray = JSONArray()
+                if (!startImageUrl.isNullOrBlank()) imagesArray.put(startImageUrl)
+                if (!endImageUrl.isNullOrBlank()) imagesArray.put(endImageUrl)
+                put("image", imagesArray)
+            } else {
+                put("mode", "text")
+            }
         }
 
         val requestJson = JSONObject().apply {

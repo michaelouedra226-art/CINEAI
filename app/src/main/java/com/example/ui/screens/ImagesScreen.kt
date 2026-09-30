@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.CreationEntity
+import com.example.ui.components.AgnesImagePickerModal
 import com.example.ui.components.AgnesInteractiveCard
 import com.example.ui.components.AgnesPrimaryButton
 import com.example.ui.components.AgnesUploadZone
@@ -63,12 +64,24 @@ fun ImagesScreen(
     var selectedSize by remember { mutableStateOf("2K") }
     var selectedRatio by remember { mutableStateOf("9:16") }
     var variationsCount by remember { mutableIntStateOf(1) }
-    var hasDroppedImage by remember { mutableStateOf(false) }
+    var selectedImageSource by remember { mutableStateOf<String?>(null) }
+    var showImagePicker by remember { mutableStateOf(false) }
 
     val styles = listOf("Cinématique", "Photographique", "Anime", "3D Render", "Art Numérique")
     val sizes = listOf("1K", "2K", "4K")
     val ratios = listOf("9:16", "16:9", "1:1", "4:3")
     val variationOptions = listOf(1, 2, 3, 4)
+
+    if (showImagePicker) {
+        AgnesImagePickerModal(
+            availableCreations = recentCreations,
+            onImageSelected = { pathOrUrl ->
+                selectedImageSource = pathOrUrl
+                showImagePicker = false
+            },
+            onDismiss = { showImagePicker = false }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -87,10 +100,36 @@ fun ImagesScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         // Zone drop / preview
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Image de référence (facultatif)",
+                color = Color(0xFFA1A1AA),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+            if (!selectedImageSource.isNullOrBlank()) {
+                Text(
+                    text = "Effacer l'image",
+                    color = Color(0xFFEF4444),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable {
+                        selectedImageSource = null
+                    }
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
         AgnesUploadZone(
-            hasImageSelected = hasDroppedImage,
+            hasImageSelected = !selectedImageSource.isNullOrBlank(),
+            previewUrl = selectedImageSource,
             onClick = {
-                hasDroppedImage = !hasDroppedImage
+                triggerHapticFeedback(context)
+                showImagePicker = true
             }
         )
 

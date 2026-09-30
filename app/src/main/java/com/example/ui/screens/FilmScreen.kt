@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -41,6 +44,7 @@ import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +64,7 @@ import com.example.data.model.CreationEntity
 import com.example.data.model.FilmEntity
 import com.example.data.model.SceneItem
 import com.example.data.repository.AgnesRepository
+import com.example.ui.components.AgnesImagePickerModal
 import com.example.ui.components.AgnesInteractiveCard
 import com.example.ui.components.AgnesPrimaryButton
 import com.example.ui.components.AgnesShimmerProgressBar
@@ -69,6 +74,8 @@ import com.example.ui.components.MediaViewerModal
 import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
+import com.example.util.ImagePickerHelper
+import kotlinx.coroutines.launch
 
 enum class FilmWorkflowStep {
     CONCEPT,    // Étape A : Paramétrage du projet (titre, prompt, durée, nombre de scènes)
@@ -79,6 +86,7 @@ enum class FilmWorkflowStep {
 fun FilmScreen(
     currentFilm: FilmEntity?,
     recentFilms: List<FilmEntity> = emptyList(),
+    availableCreations: List<CreationEntity> = emptyList(),
     isGenerating: Boolean,
     generationProgress: Int,
     currentStepText: String,
@@ -102,8 +110,10 @@ fun FilmScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var showCancelDialog by remember { mutableStateOf(false) }
     var selectedSceneForPreview by remember { mutableStateOf<SceneItem?>(null) }
+    var showImagePicker by remember { mutableStateOf(false) }
 
     // Workflow en 3 étapes : Étape A (Concept) -> Étape B (Découpage) -> Étape C (Production)
     var currentWorkflowStep by remember { mutableStateOf(FilmWorkflowStep.CONCEPT) }
@@ -115,6 +125,20 @@ fun FilmScreen(
     var filmPrompt by remember { mutableStateOf("") }
     var hasStartImage by remember { mutableStateOf(false) }
     var startImageUrl by remember { mutableStateOf("") }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                val savedPath = ImagePickerHelper.saveSelectedImage(context, uri)
+                if (savedPath != null) {
+                    startImageUrl = savedPath
+                    hasStartImage = true
+                }
+            }
+        }
+    }
 
     var selectedStyle by remember { mutableStateOf("cinematic") }
     val styles = listOf(
@@ -191,6 +215,18 @@ fun FilmScreen(
             creation = creationObj,
             film = null,
             onDismiss = { selectedSceneForPreview = null }
+        )
+    }
+
+    if (showImagePicker) {
+        AgnesImagePickerModal(
+            availableCreations = availableCreations,
+            onImageSelected = { pathOrUrl ->
+                startImageUrl = pathOrUrl
+                hasStartImage = true
+                showImagePicker = false
+            },
+            onDismiss = { showImagePicker = false }
         )
     }
 
@@ -822,10 +858,8 @@ fun FilmScreen(
                 hasImageSelected = hasStartImage,
                 previewUrl = if (hasStartImage) startImageUrl else null,
                 onClick = {
-                    hasStartImage = !hasStartImage
-                    if (hasStartImage && startImageUrl.isBlank()) {
-                        startImageUrl = "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=720&q=80"
-                    }
+                    triggerHapticFeedback(context)
+                    showImagePicker = true
                 }
             )
 

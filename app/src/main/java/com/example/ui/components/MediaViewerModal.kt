@@ -64,6 +64,7 @@ import com.example.data.model.SceneItem
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
 import com.example.util.DownloadHelper
+import com.example.util.OfflineVideoManager
 import kotlinx.coroutines.delay
 
 @Composable
@@ -470,12 +471,29 @@ fun VideoPlayerComponent(
     fallbackImageUrl: String? = null
 ) {
     val context = LocalContext.current
+    var isCachedLocally by remember(videoUrl) {
+        mutableStateOf(OfflineVideoManager.isVideoCached(context, videoUrl))
+    }
+    val playableUri = remember(videoUrl, isCachedLocally) {
+        OfflineVideoManager.getPlayableUri(context, videoUrl)
+    }
+
     var isPlaying by remember(videoUrl) { mutableStateOf(false) }
     var currentPositionMs by remember(videoUrl) { mutableIntStateOf(0) }
     var durationMs by remember(videoUrl) { mutableIntStateOf(0) }
     var isBuffering by remember(videoUrl) { mutableStateOf(true) }
     var hasError by remember(videoUrl) { mutableStateOf(false) }
     var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
+
+    // Téléchargement automatique en arrière-plan pour garantir la disponibilité 100% hors-ligne
+    LaunchedEffect(videoUrl) {
+        if (!isCachedLocally && videoUrl.startsWith("http")) {
+            val cachedPath = OfflineVideoManager.cacheVideo(context, videoUrl)
+            if (cachedPath != null) {
+                isCachedLocally = true
+            }
+        }
+    }
 
     // Synchronisation périodique de la progression vidéo
     LaunchedEffect(isPlaying, videoUrl) {
@@ -503,11 +521,11 @@ fun VideoPlayerComponent(
         contentAlignment = Alignment.Center
     ) {
         if (!hasError) {
-            androidx.compose.runtime.key(videoUrl) {
+            androidx.compose.runtime.key(videoUrl, isCachedLocally) {
                 AndroidView(
                     factory = { ctx ->
                         VideoView(ctx).apply {
-                            setVideoURI(Uri.parse(videoUrl))
+                            setVideoURI(playableUri)
                             setOnPreparedListener { mp ->
                                 isBuffering = false
                                 durationMs = mp.duration
@@ -539,6 +557,30 @@ fun VideoPlayerComponent(
                 ImageViewerWithZoom(imageUrl = fallbackImageUrl)
             } else {
                 EmptyMediaState(message = "Format vidéo non décodable sur ce périphérique")
+            }
+        }
+
+        // Badge « Disponible hors-ligne » si stocké en local
+        if (isCachedLocally) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xDD064E3B))
+                    .border(1.dp, Color(0xFF10B981), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AgnesSvgIcon(icon = AgnesIcon.CHECK, tint = Color(0xFF34D399), size = 12.dp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Hors-ligne disponible",
+                        color = Color(0xFFD1FAE5),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 

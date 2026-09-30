@@ -19,12 +19,38 @@ object DownloadHelper {
     ): Boolean {
         return try {
             val cleanUrl = url.trim()
-            if (cleanUrl.isBlank() || !cleanUrl.startsWith("http")) {
+            if (cleanUrl.isBlank()) {
                 Toast.makeText(context, "URL d'image invalide", Toast.LENGTH_SHORT).show()
                 return false
             }
 
             val filename = "Agnes_IMG_${System.currentTimeMillis()}.jpg"
+
+            // Si c'est un fichier local
+            val localFile = when {
+                cleanUrl.startsWith("file://") -> File(Uri.parse(cleanUrl).path.orEmpty())
+                cleanUrl.startsWith("/") -> File(cleanUrl)
+                else -> null
+            }
+
+            if (localFile != null && localFile.exists()) {
+                val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "AgnesStudio")
+                if (!destDir.exists()) destDir.mkdirs()
+                val destFile = File(destDir, filename)
+                localFile.inputStream().use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Toast.makeText(context, "Image enregistrée dans Galerie/Photos/AgnesStudio", Toast.LENGTH_SHORT).show()
+                return true
+            }
+
+            if (!cleanUrl.startsWith("http")) {
+                Toast.makeText(context, "URL d'image non supportée", Toast.LENGTH_SHORT).show()
+                return false
+            }
+
             val title = if (!prompt.isNullOrBlank()) "Agnes: ${prompt.take(25)}..." else "Image Agnes Studio"
 
             val request = DownloadManager.Request(Uri.parse(cleanUrl)).apply {
@@ -42,7 +68,7 @@ object DownloadHelper {
             Toast.makeText(context, "Téléchargement de l'image lancé...", Toast.LENGTH_SHORT).show()
             true
         } catch (e: Exception) {
-            Toast.makeText(context, "Échec du téléchargement: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Échec de l'enregistrement: ${e.message}", Toast.LENGTH_LONG).show()
             false
         }
     }
@@ -54,12 +80,39 @@ object DownloadHelper {
     ): Boolean {
         return try {
             val cleanUrl = url.trim()
-            if (cleanUrl.isBlank() || !cleanUrl.startsWith("http")) {
+            if (cleanUrl.isBlank()) {
                 Toast.makeText(context, "URL de vidéo invalide", Toast.LENGTH_SHORT).show()
                 return false
             }
 
             val filename = "Agnes_VID_${System.currentTimeMillis()}.mp4"
+
+            // Si c'est déjà un fichier local ou mis en cache
+            val localFile = when {
+                cleanUrl.startsWith("file://") -> File(Uri.parse(cleanUrl).path.orEmpty())
+                cleanUrl.startsWith("/") -> File(cleanUrl)
+                OfflineVideoManager.isVideoCached(context, cleanUrl) -> OfflineVideoManager.getCachedFile(context, cleanUrl)
+                else -> null
+            }
+
+            if (localFile != null && localFile.exists()) {
+                val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "AgnesStudio")
+                if (!destDir.exists()) destDir.mkdirs()
+                val destFile = File(destDir, filename)
+                localFile.inputStream().use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Toast.makeText(context, "Vidéo enregistrée dans Galerie/Vidéos/AgnesStudio", Toast.LENGTH_SHORT).show()
+                return true
+            }
+
+            if (!cleanUrl.startsWith("http")) {
+                Toast.makeText(context, "URL de vidéo non supportée", Toast.LENGTH_SHORT).show()
+                return false
+            }
+
             val title = if (!prompt.isNullOrBlank()) "Agnes: ${prompt.take(25)}..." else "Vidéo Agnes Studio"
 
             val request = DownloadManager.Request(Uri.parse(cleanUrl)).apply {
@@ -77,7 +130,7 @@ object DownloadHelper {
             Toast.makeText(context, "Téléchargement de la vidéo lancé...", Toast.LENGTH_SHORT).show()
             true
         } catch (e: Exception) {
-            Toast.makeText(context, "Échec du téléchargement: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Échec de l'enregistrement: ${e.message}", Toast.LENGTH_LONG).show()
             false
         }
     }

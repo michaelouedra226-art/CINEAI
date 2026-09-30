@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,17 +36,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.data.model.CreationEntity
 import com.example.data.model.QueueItemEntity
+import com.example.ui.components.AgnesImagePickerModal
 import com.example.ui.components.AgnesInteractiveCard
 import com.example.ui.components.AgnesPrimaryButton
 import com.example.ui.components.AgnesShimmerProgressBar
@@ -50,16 +59,21 @@ import com.example.ui.components.AgnesUploadZone
 import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
+import com.example.util.ImagePickerHelper
+import kotlinx.coroutines.launch
 
 @Composable
 fun VideosScreen(
     queueItems: List<QueueItemEntity>,
     isGenerating: Boolean,
+    recentVideos: List<CreationEntity> = emptyList(),
+    onSelectCreation: ((CreationEntity) -> Unit)? = null,
     onGenerateVideo: (prompt: String, mode: String, startImg: String?, duration: Int, resolution: String, numFrames: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var mode by remember { mutableStateOf("image") } // "text" | "image"
+    val coroutineScope = rememberCoroutineScope()
+    var mode by remember { mutableStateOf("text") } // "text" | "image"
     var prompt by remember {
         mutableStateOf("")
     }
@@ -67,6 +81,19 @@ fun VideosScreen(
     var selectedResolution by remember { mutableStateOf("720p 16:9") }
     var hasPickedStartImage by remember { mutableStateOf(false) }
     var pickedImageSource by remember { mutableStateOf<String?>(null) }
+    var showImagePicker by remember { mutableStateOf(false) }
+
+    if (showImagePicker) {
+        AgnesImagePickerModal(
+            availableCreations = recentVideos,
+            onImageSelected = { pathOrUrl ->
+                pickedImageSource = pathOrUrl
+                hasPickedStartImage = true
+                showImagePicker = false
+            },
+            onDismiss = { showImagePicker = false }
+        )
+    }
 
     // Règle 8n + 1 (Section 11.2 du cahier des charges)
     val durationOptions = listOf(
@@ -133,9 +160,38 @@ fun VideosScreen(
         AnimatedVisibility(visible = mode == "image") {
             Column {
                 Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Image de départ (Photo réelle)",
+                        color = Color(0xFFA1A1AA),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (hasPickedStartImage) {
+                        Text(
+                            text = "Effacer l'image",
+                            color = Color(0xFFEF4444),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable {
+                                hasPickedStartImage = false
+                                pickedImageSource = null
+                            }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
                 AgnesUploadZone(
                     hasImageSelected = hasPickedStartImage,
-                    onClick = { hasPickedStartImage = !hasPickedStartImage }
+                    previewUrl = if (hasPickedStartImage) pickedImageSource else null,
+                    onClick = {
+                        triggerHapticFeedback(context)
+                        showImagePicker = true
+                    }
                 )
             }
         }
@@ -349,6 +405,101 @@ fun VideosScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // ── Vidéos récentes terminées (Lecture directe & hors-ligne) ──
+        val completedVideos = recentVideos.filter { it.status == "done" && !it.resultUrl.isNullOrBlank() }
+        if (completedVideos.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Vidéos prêtes (${completedVideos.size})",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Lecture hors-ligne disponible",
+                    color = Color(0xFF10B981),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(completedVideos) { vid ->
+                    Box(
+                        modifier = Modifier
+                            .width(160.dp)
+                            .height(110.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF13131A))
+                            .border(1.dp, Color(0xFF282836), RoundedCornerShape(12.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                onSelectCreation?.invoke(vid)
+                            }
+                    ) {
+                        val thumb = vid.thumbnail ?: vid.resultUrl
+                        if (!thumb.isNullOrBlank()) {
+                            AsyncImage(
+                                model = thumb,
+                                contentDescription = vid.prompt,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize().background(Color(0xFF1C1C25)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AgnesSvgIcon(icon = AgnesIcon.VIDEO, tint = Color(0xFFA78BFA), size = 28.dp)
+                            }
+                        }
+
+                        // Gradient sombre
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        0.0f to Color.Transparent,
+                                        0.5f to Color(0x66000000),
+                                        1.0f to Color(0xEE0A0A0F)
+                                    )
+                                )
+                        )
+
+                        // Bouton Play central
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xCC7C3AED)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AgnesSvgIcon(icon = AgnesIcon.PLAY, tint = Color.White, size = 16.dp)
+                        }
+
+                        // Titre en bas
+                        Text(
+                            text = vid.prompt,
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(8.dp)
+                        )
                     }
                 }
             }
