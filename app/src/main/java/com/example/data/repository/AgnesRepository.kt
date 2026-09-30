@@ -362,6 +362,8 @@ class AgnesRepository(
         manualScenes: Int?,
         startImage: String,
         initialScenes: List<SceneItem>? = null,
+        dialogueLanguage: String = "fr",
+        audioPresence: String = "dialogue",
         stopRequested: () -> Boolean = { false },
         onSceneUpdate: (suspend (scenes: List<SceneItem>, progressPct: Int, stepText: String) -> Unit)? = null
     ) = withContext(Dispatchers.IO) {
@@ -376,7 +378,7 @@ class AgnesRepository(
 
         TechnicalLogManager.log(
             "FILM_PIPELINE",
-            "Démarrage Film: $numScenes scènes, ${breakdown.framesPerScene} frames/scène, total ${breakdown.actualTotalDuration}s"
+            "Démarrage Film: $numScenes scènes, ${breakdown.framesPerScene} frames/scène, total ${breakdown.actualTotalDuration}s (langue: $dialogueLanguage, audio: $audioPresence)"
         )
 
         // ═══════════════════════════════════════════════════════
@@ -399,6 +401,8 @@ class AgnesRepository(
                 prompt = prompt,
                 style = filmStyle,
                 numScenes = numScenes,
+                dialogueLanguage = dialogueLanguage,
+                audioPresence = audioPresence,
                 stopRequested = stopRequested,
                 onProgressUpdate = { pct, txt ->
                     onSceneUpdate?.invoke(emptyList(), pct, txt)
@@ -424,7 +428,10 @@ class AgnesRepository(
                     camera_movement = d.cameraMovement,
                     status = "pending",
                     keyframe = null,
-                    videoUrl = null
+                    videoUrl = null,
+                    dialogue = d.dialogue,
+                    audioMode = d.audioMode,
+                    characterAnchor = d.characterAnchor
                 )
             }.toMutableList()
         }
@@ -457,9 +464,12 @@ class AgnesRepository(
 
             val sc = sceneItems[i]
             val pct = 20 + ((i + 1) * 20 / numScenes)
-            onSceneUpdate?.invoke(sceneItems, pct, "Phase 2 : Génération Keyframe ${i + 1}/$numScenes...")
+            onSceneUpdate?.invoke(sceneItems, pct, "Phase 2 : Génération Keyframe ${i + 1}/$numScenes (continuité personnage)...")
 
-            val keyframePrompt = "${sc.image_prompt}, END frame scene ${i + 1}, 9:16 vertical cinema, 8k"
+            val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.image_prompt.contains(sc.characterAnchor)) {
+                "[Protagonist Anchor: ${sc.characterAnchor}], "
+            } else ""
+            val keyframePrompt = "$charPrefix${sc.image_prompt}, END frame scene ${i + 1}, style $filmStyle, 9:16 vertical cinema, 8k, consistent lighting"
             val imgRes = apiClient.generateImage(
                 apiKey = settings.apiKey,
                 prompt = keyframePrompt,
@@ -501,12 +511,29 @@ class AgnesRepository(
 
             val pctBase = 45 + (i * 50 / numScenes)
             sceneItems[i] = sc.copy(status = "processing", progressText = "Rendu vidéo scène ${sc.number}...")
-            onSceneUpdate?.invoke(sceneItems, pctBase, "Phase 3 : Synthèse vidéo scène ${sc.number}/$numScenes...")
+            onSceneUpdate?.invoke(sceneItems, pctBase, "Phase 3 : Synthèse vidéo scène ${sc.number}/$numScenes (dialogue ${dialogueLanguage.uppercase()})...")
+
+            val cleanDiag = sc.dialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
+            val dialogueDirective = when {
+                sc.audioMode == "ambient" -> ", atmospheric cinema sound design, no spoken dialogue"
+                dialogueLanguage == "fr" -> {
+                    val speechText = if (cleanDiag.isNotBlank()) cleanDiag else "Nous avançons vers l'objectif sans faiblir."
+                    ", Authentic Spoken French dialogue: \"$speechText\", synchronized French lip sync, audible clear French voice acting, no English words, no silence"
+                }
+                else -> {
+                    val speechText = if (cleanDiag.isNotBlank()) cleanDiag else "We must keep moving forward."
+                    ", Authentic Spoken English dialogue: \"$speechText\", synchronized lip movement, clear speech"
+                }
+            }
+
+            val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.video_prompt.contains(sc.characterAnchor)) {
+                "[Character: ${sc.characterAnchor}], "
+            } else ""
 
             val videoInit = apiClient.initiateVideo(
                 apiKey = settings.apiKey,
                 profile = settings.rateLimitProfile,
-                prompt = "${sc.video_prompt}, continuité fluide, style $filmStyle",
+                prompt = "$charPrefix${sc.video_prompt}$dialogueDirective, continuité fluide, style $filmStyle",
                 startImageUrl = previousFrameUrl,
                 endImageUrl = currentKeyframe,
                 durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
@@ -594,7 +621,9 @@ class AgnesRepository(
     suspend fun generateScriptDrafts(
         prompt: String,
         style: String,
-        numScenes: Int
+        numScenes: Int,
+        dialogueLanguage: String = "fr",
+        audioPresence: String = "dialogue"
     ): Pair<String, List<SceneItem>> = withContext(Dispatchers.IO) {
         val settings = settingsDao.getSettingsDirect() ?: SettingsEntity()
         if (settings.apiKey.isBlank()) {
@@ -605,6 +634,8 @@ class AgnesRepository(
             prompt = prompt,
             style = style,
             numScenes = numScenes,
+            dialogueLanguage = dialogueLanguage,
+            audioPresence = audioPresence,
             stopRequested = { false }
         )
         if (scriptRes !is ApiResponse.Success) {
@@ -621,7 +652,10 @@ class AgnesRepository(
                 camera_movement = d.cameraMovement,
                 status = "pending",
                 keyframe = null,
-                videoUrl = null
+                videoUrl = null,
+                dialogue = d.dialogue,
+                audioMode = d.audioMode,
+                characterAnchor = d.characterAnchor
             )
         }
         Pair(scriptRes.data.title, scenes)
@@ -652,8 +686,12 @@ class AgnesRepository(
             val sc = sceneItems[i]
             if (sc.keyframe.isNullOrBlank()) {
                 val pct = 20 + ((i + 1) * 20 / numScenes)
-                onSceneUpdate?.invoke(sceneItems, pct, "Keyframe ${i + 1}/$numScenes...")
-                val keyframePrompt = "${sc.image_prompt}, END frame scene ${i + 1}, 9:16 vertical cinema, 8k"
+                onSceneUpdate?.invoke(sceneItems, pct, "Keyframe ${i + 1}/$numScenes (continuité personnage)...")
+
+                val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.image_prompt.contains(sc.characterAnchor)) {
+                    "[Protagonist Anchor: ${sc.characterAnchor}], "
+                } else ""
+                val keyframePrompt = "$charPrefix${sc.image_prompt}, END frame scene ${i + 1}, style ${film.filmStyle}, 9:16 vertical cinema, 8k, consistent lighting"
                 val imgRes = apiClient.generateImage(
                     apiKey = settings.apiKey,
                     prompt = keyframePrompt,
@@ -686,12 +724,25 @@ class AgnesRepository(
             if (sc.status != "done" || sc.videoUrl.isNullOrBlank()) {
                 val pctBase = 45 + (i * 50 / numScenes)
                 sceneItems[i] = sc.copy(status = "processing", progressText = "Rendu vidéo scène ${sc.number}...")
-                onSceneUpdate?.invoke(sceneItems, pctBase, "Scène ${sc.number}/$numScenes...")
+                onSceneUpdate?.invoke(sceneItems, pctBase, "Scène ${sc.number}/$numScenes (reprise synchro)...")
+
+                val cleanDiag = sc.dialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
+                val dialogueDirective = when {
+                    sc.audioMode == "ambient" -> ", atmospheric cinema sound design, no spoken dialogue"
+                    else -> {
+                        val speechText = if (cleanDiag.isNotBlank()) cleanDiag else "Nous avançons vers l'objectif sans faiblir."
+                        ", Authentic Spoken French dialogue: \"$speechText\", synchronized French lip sync, audible clear French voice acting, no English words, no silence"
+                    }
+                }
+
+                val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.video_prompt.contains(sc.characterAnchor)) {
+                    "[Character: ${sc.characterAnchor}], "
+                } else ""
 
                 val videoInit = apiClient.initiateVideo(
                     apiKey = settings.apiKey,
                     profile = settings.rateLimitProfile,
-                    prompt = "${sc.video_prompt}, continuité fluide, style ${film.filmStyle}",
+                    prompt = "$charPrefix${sc.video_prompt}$dialogueDirective, continuité fluide, style ${film.filmStyle}",
                     startImageUrl = previousFrameUrl,
                     endImageUrl = currentKeyframe,
                     durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),

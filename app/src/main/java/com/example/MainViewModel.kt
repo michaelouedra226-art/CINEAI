@@ -278,7 +278,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         requestedDurationSeconds: Double,
         manualScenes: Int?,
         startImage: String = "",
-        initialScenes: List<SceneItem>? = null
+        initialScenes: List<SceneItem>? = null,
+        dialogueLanguage: String = "fr",
+        audioPresence: String = "dialogue"
     ) {
         if (_isFilmGenerating.value) return
         val currentKey = settings.value.apiKey
@@ -315,6 +317,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     manualScenes = manualScenes,
                     startImage = startImage,
                     initialScenes = initialScenes,
+                    dialogueLanguage = dialogueLanguage,
+                    audioPresence = audioPresence,
                     stopRequested = { filmStopRequested },
                     onSceneUpdate = { scenes, progress, stepText ->
                         _currentFilmScenes.value = scenes
@@ -338,6 +342,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prompt: String,
         style: String,
         numScenes: Int,
+        dialogueLanguage: String = "fr",
+        audioPresence: String = "dialogue",
         onSuccess: (String, List<SceneItem>) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -349,7 +355,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             try {
-                val (draftTitle, scenes) = repository.generateScriptDrafts(prompt, style, numScenes)
+                val (draftTitle, scenes) = repository.generateScriptDrafts(prompt, style, numScenes, dialogueLanguage, audioPresence)
                 onSuccess(draftTitle, scenes)
             } catch (e: Exception) {
                 onError(e.message ?: "Erreur de découpage")

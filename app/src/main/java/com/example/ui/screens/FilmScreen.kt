@@ -91,10 +91,12 @@ fun FilmScreen(
         requestedDurationSeconds: Double,
         manualScenes: Int?,
         startImage: String,
-        initialScenes: List<SceneItem>?
+        initialScenes: List<SceneItem>?,
+        dialogueLanguage: String,
+        audioPresence: String
     ) -> Unit,
     onCancelGeneration: () -> Unit,
-    onPrepareDrafts: ((prompt: String, style: String, numScenes: Int, (String, List<SceneItem>) -> Unit) -> Unit)? = null,
+    onPrepareDrafts: ((prompt: String, style: String, numScenes: Int, dialogueLanguage: String, audioPresence: String, (String, List<SceneItem>) -> Unit) -> Unit)? = null,
     onSelectFilm: ((FilmEntity) -> Unit)? = null,
     onResumeFilm: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -108,6 +110,8 @@ fun FilmScreen(
 
     // Formulaire de configuration Film
     var filmTitle by remember { mutableStateOf("") }
+    var selectedLanguage by remember { mutableStateOf("fr") }
+    var selectedAudioPresence by remember { mutableStateOf("dialogue") }
     var filmPrompt by remember { mutableStateOf("") }
     var hasStartImage by remember { mutableStateOf(false) }
     var startImageUrl by remember { mutableStateOf("") }
@@ -541,6 +545,28 @@ fun FilmScreen(
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = "Paroles / Dialogue (Français) :", color = Color(0xFFA78BFA), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(
+                            value = sc.dialogue,
+                            onValueChange = { newDiag ->
+                                val updated = draftScenes.toMutableList()
+                                updated[index] = sc.copy(dialogue = newDiag)
+                                draftScenes = updated
+                            },
+                            placeholder = { Text("Ex: « Ne regarde pas en arrière, nous devons sortir d'ici ! »", color = Color(0xFF555566), fontSize = 11.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF191924),
+                                unfocusedContainerColor = Color(0xFF191924),
+                                focusedBorderColor = Color(0xFF7C3AED),
+                                unfocusedBorderColor = Color(0xFF2C2C3C),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(text = "Prompt Image (Keyframe) :", color = Color(0xFFA1A1AA), fontSize = 10.sp)
                         OutlinedTextField(
                             value = sc.image_prompt,
@@ -598,7 +624,9 @@ fun FilmScreen(
                         requestedDurationSeconds,
                         draftScenes.size,
                         startImg,
-                        draftScenes
+                        draftScenes,
+                        selectedLanguage,
+                        selectedAudioPresence
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -1038,8 +1066,95 @@ fun FilmScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 5. Prompt principal du film
-            Text(text = "5. Prompt principal du film (intrigue & univers)", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            // 5. Langue & Paroles des personnages (Garantie de cohérence linguistique et vocale)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "5. Langue & Paroles", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    text = if (selectedLanguage == "fr") "Français garanti 🇫🇷" else "English 🇬🇧",
+                    color = Color(0xFFA78BFA),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("fr" to "Français 🇫🇷", "en" to "English 🇬🇧").forEach { (code, label) ->
+                    val isSel = selectedLanguage == code
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSel) Color(0xFF7C3AED) else Color(0xFF1C1C25))
+                            .border(1.dp, if (isSel) Color(0xFFA78BFA) else Color(0xFF2E2E3E), RoundedCornerShape(8.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                selectedLanguage = code
+                            }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = label, color = if (isSel) Color.White else Color(0xFFBBBBD0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    "dialogue" to "Dialogues parlés",
+                    "voice_over" to "Voix off narrative",
+                    "ambient" to "Sans paroles"
+                ).forEach { (mode, label) ->
+                    val isSel = selectedAudioPresence == mode
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSel) Color(0xFF3B1E6D) else Color(0xFF161622))
+                            .border(1.dp, if (isSel) Color(0xFFA78BFA) else Color(0xFF282836), RoundedCornerShape(8.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                selectedAudioPresence = mode
+                            }
+                            .padding(vertical = 7.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (isSel) Color.White else Color(0xFFA1A1AA),
+                            fontSize = 10.sp,
+                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF161B26))
+                    .border(1.dp, Color(0xFF25334D), RoundedCornerShape(8.dp))
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "✨ Cohérence garantie : bible de personnage et style visuel réinjectés sur chaque plan. Les répliques sont générées en français avec synchronisation vocale.",
+                    color = Color(0xFF93C5FD),
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 6. Prompt principal du film
+            Text(text = "6. Prompt principal du film (intrigue & univers)", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = filmPrompt,
@@ -1078,7 +1193,7 @@ fun FilmScreen(
                             val num = if (isAutoScenesMode) null else manualScenesCount
                             val count = breakdown.numScenes
                             if (onPrepareDrafts != null) {
-                                onPrepareDrafts(filmPrompt, selectedStyle, count) { finalTitle, generatedDrafts ->
+                                onPrepareDrafts(filmPrompt, selectedStyle, count, selectedLanguage, selectedAudioPresence) { finalTitle, generatedDrafts ->
                                     isPreparingDrafts = false
                                     if (filmTitle.isBlank()) filmTitle = finalTitle
                                     draftScenes = generatedDrafts
@@ -1094,7 +1209,9 @@ fun FilmScreen(
                                         image_prompt = "$filmPrompt, plan $idx, style $selectedStyle",
                                         video_prompt = "$filmPrompt, caméra travelling, plan $idx",
                                         camera_movement = "Travelling avant",
-                                        status = "pending"
+                                        status = "pending",
+                                        dialogue = if (selectedAudioPresence == "ambient") "" else "« Nous devons continuer sans hésiter. »",
+                                        audioMode = selectedAudioPresence
                                     )
                                 }
                                 isPreparingDrafts = false
@@ -1124,7 +1241,9 @@ fun FilmScreen(
                             requestedDurationSeconds,
                             if (isAutoScenesMode) null else manualScenesCount,
                             startImg,
-                            null
+                            null,
+                            selectedLanguage,
+                            selectedAudioPresence
                         )
                     },
                     modifier = Modifier.weight(1f),

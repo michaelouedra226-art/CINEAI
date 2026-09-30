@@ -144,17 +144,29 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
                         currentStepText = filmStepText,
                         elapsedSeconds = filmElapsedSeconds,
                         currentScenes = currentFilmScenes,
-                        onStartNewFilm = { title, prompt, style, requestedDurationSeconds, manualScenes, startImage, initialScenes ->
-                            viewModel.startNewFilm(title, prompt, style, requestedDurationSeconds, manualScenes, startImage, initialScenes)
+                        onStartNewFilm = { title, prompt, style, requestedDurationSeconds, manualScenes, startImage, initialScenes, dialogueLanguage, audioPresence ->
+                            viewModel.startNewFilm(
+                                title = title,
+                                prompt = prompt,
+                                style = style,
+                                requestedDurationSeconds = requestedDurationSeconds,
+                                manualScenes = manualScenes,
+                                startImage = startImage,
+                                initialScenes = initialScenes,
+                                dialogueLanguage = dialogueLanguage,
+                                audioPresence = audioPresence
+                            )
                         },
                         onCancelGeneration = {
                             viewModel.cancelFilmGeneration()
                         },
-                        onPrepareDrafts = { prompt, style, numScenes, onReady ->
+                        onPrepareDrafts = { prompt, style, numScenes, dialogueLanguage, audioPresence, onReady ->
                             viewModel.generateScriptDrafts(
                                 prompt = prompt,
                                 style = style,
                                 numScenes = numScenes,
+                                dialogueLanguage = dialogueLanguage,
+                                audioPresence = audioPresence,
                                 onSuccess = { draftTitle, scenes ->
                                     onReady(draftTitle, scenes)
                                 },

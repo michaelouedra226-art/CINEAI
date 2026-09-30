@@ -133,7 +133,10 @@ data class SceneItem(
     val videoUrl: String? = null,
     val error: String? = null,
     val stallRetries: Int = 0,
-    val progressText: String = ""
+    val progressText: String = "",
+    val dialogue: String = "",
+    val audioMode: String = "dialogue",
+    val characterAnchor: String = ""
 ) {
     fun toJsonObject(): JSONObject {
         return JSONObject().apply {
@@ -149,6 +152,9 @@ data class SceneItem(
             put("error", error ?: JSONObject.NULL)
             put("stallRetries", stallRetries)
             put("progressText", progressText)
+            put("dialogue", dialogue)
+            put("audioMode", audioMode)
+            put("characterAnchor", characterAnchor)
         }
     }
 
@@ -166,7 +172,10 @@ data class SceneItem(
                 videoUrl = if (obj.isNull("videoUrl")) null else obj.optString("videoUrl"),
                 error = if (obj.isNull("error")) null else obj.optString("error"),
                 stallRetries = obj.optInt("stallRetries", 0),
-                progressText = obj.optString("progressText", "")
+                progressText = obj.optString("progressText", ""),
+                dialogue = obj.optString("dialogue", ""),
+                audioMode = obj.optString("audioMode", "dialogue"),
+                characterAnchor = obj.optString("characterAnchor", "")
             )
         }
 
