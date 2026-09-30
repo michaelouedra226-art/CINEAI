@@ -432,7 +432,7 @@ class ApiClient(
             )
         }
 
-        val BATCH_SIZE = 8
+        val BATCH_SIZE = 16
         val totalBatches = (numScenes + BATCH_SIZE - 1) / BATCH_SIZE
         val allDrafts = mutableListOf<GeneratedSceneDraft>()
         var filmTitle = "Film : " + prompt.take(30)
@@ -441,24 +441,18 @@ class ApiClient(
         var visualConsistency = ""
 
         val langRule = if (dialogueLanguage == "fr") {
-            """
-            DIRECTIVE LINGUISTIQUE ABSOLUE :
-            1. TOUTES les répliques dans le champ 'dialogue' DOIVENT être en FRANÇAIS pur, soutenu et expressif.
-            2. INTERDICTION TOTALE DE TOUT MOT EN ANGLAIS (interdit de mettre "look", "wait", "run", "what", "come on", etc.).
-            3. INTERDICTION FORMELLE DE LAISSER LE CHAMP 'dialogue' VIDE. Chaque scène DOIT comporter une réplique parlée ou une phrase de voix off en français complet.
-            4. Le champ 'dialogue' doit être rédigé entre guillemets français : « [Réplique en français] ».
-            """.trimIndent()
+            "DIALOGUES EN FRANÇAIS OBLIGATOIRES : Chaque scène DOIT avoir une réplique parlée ou une phrase de voix off en français complet dans 'dialogue', entre guillemets « ... ». Interdiction d'anglais et interdiction de réplique vide."
         } else {
-            "LANGUAGE RULE: All spoken dialogue and voice-overs must be in English with double quotes."
+            "ENGLISH SPOKEN DIALOGUE: Every scene must have a spoken dialogue or voice-over in English in 'dialogue'."
         }
 
         val audioRule = when (audioPresence) {
-            "voice_over" -> "STYLE AUDIO : Voix off narrative profonde, poétique et continue en français pour chaque scène dans le champ 'dialogue'."
-            "ambient" -> "STYLE AUDIO : Ambiance sonore et sound design cinématographique sans paroles (laisser 'dialogue' vide uniquement pour ce mode ambiance)."
-            else -> "STYLE AUDIO : Dialogues parlés vifs, cinématographiques et expressifs entre les personnages pour chaque scène dans le champ 'dialogue' (en français)."
+            "voice_over" -> "Voix off narrative continue en français pour chaque scène dans 'dialogue'."
+            "ambient" -> "Mode muet/sound design : laisser 'dialogue' vide."
+            else -> "Dialogues parlés vifs entre les personnages en français dans 'dialogue'."
         }
 
-        TechnicalLogManager.log("PHASE_1", "POST $AGNES_CHAT_URL - Écriture scénario ($numScenes scènes, langue: $dialogueLanguage, audio: $audioPresence)")
+        TechnicalLogManager.log("PHASE_1", "POST $AGNES_CHAT_URL - Écriture scénario haute vitesse ($numScenes scènes en $totalBatches lot(s), langue: $dialogueLanguage)")
 
         for (batchIndex in 0 until totalBatches) {
             if (stopRequested()) {
@@ -477,92 +471,61 @@ class ApiClient(
 
             val systemPrompt = if (batchIndex == 0) {
                 """
-                Tu es un réalisateur, scénariste et showrunner IA d'élite.
-                Tu dois garantir une COHÉRENCE VISUELLE ET NARRATIVE TOTALE entre chaque plan du film.
+                Tu es un réalisateur et scénariste de cinéma IA d'élite.
+                Génère le découpage scénaristique cinématographique ultra-dynamique.
 
-                CONSIGNES MAÎTRESSES DE COHÉRENCE ET DE DIALOGUES :
-                1. BIBLE VISUELLE ET PERSONNAGES :
-                   - 'character_consistency' : Décris le protagoniste principal de manière immuable et ultra-précise (traits du visage, âge, coupe et couleur de cheveux, tenue vestimentaire exacte avec couleurs, accessoires distinctifs). Cette description servira d'ancre pour TOUTES les scènes.
-                   - 'visual_consistency' : Charte visuelle maîtresse (palette de couleurs, ambiance lumineuse, texture 35mm anamorphic).
-                2. LANGUE ET PAROLES :
-                   $langRule
-                   $audioRule
-                3. PROMPTS D'IMAGES ET VIDÉO :
-                   - 'image_prompt' : Prompt cinématographique décrivant l'action du plan, avec intégration du protagoniste identifiable, 9:16 vertical cinema, 8k.
-                   - 'video_prompt' : Mouvement fluide de caméra, action dynamique des personnages, éclairage cinématique.
-                   - 'dialogue' : Réplique parlée ou voix off (strictement en français, non vide).
+                CONSIGNES STRICTES :
+                1. 'character_consistency' : Décris le protagoniste principal de façon immuable (visage, cheveux, tenue vestimentaire précise avec couleurs).
+                2. 'visual_consistency' : Palette de couleurs, lumière et texture cinématographique 35mm.
+                3. $langRule
+                4. $audioRule
 
-                Exemple de plan attendu :
-                {
-                  "number": 1,
-                  "title": "L'Alerte au Poste de Contrôle",
-                  "description": "Marc scrute les écrans holographiques clignotants alors que les alarmes retentissent.",
-                  "dialogue": "« Le signal provient du secteur quatre... Nous n'avons plus que quelques minutes ! »",
-                  "audio_mode": "$audioPresence",
-                  "image_prompt": "Marc in charcoal trench coat checking holographic monitors, alarmed expression, emergency red neon lights, 9:16 vertical cinema, 8k",
-                  "video_prompt": "Slow push-in camera movement towards the monitors, urgent atmosphere, cinematic lighting",
-                  "camera_movement": "Travelling avant lent"
-                }
-
-                Tu dois répondre exclusivement avec un objet JSON valide, sans formatage markdown :
+                Réponds EXCLUSIVEMENT en JSON compact sans markdown :
                 {
                   "film_title": "Titre cinématographique",
-                  "logline": "Accroche narrative résumant l'intrigue en une phrase",
-                  "character_consistency": "Description détaillée immuable du personnage (visage, cheveux, vêtements précis, accessoires)",
-                  "visual_consistency": "Charte visuelle commune (palette, lumière contrastée, grain 35mm)",
+                  "logline": "Accroche en une phrase",
+                  "character_consistency": "Description permanente du protagoniste",
+                  "visual_consistency": "Charte visuelle commune ($style)",
                   "scenes": [
                     {
                       "number": 1,
-                      "title": "Titre court de la scène",
-                      "description": "Description détaillée de l'action",
+                      "title": "Titre court",
+                      "action": "Description concise de l'action du plan",
                       "dialogue": "« Réplique en français »",
-                      "audio_mode": "$audioPresence",
-                      "image_prompt": "Cinematic visual prompt, 9:16 vertical cinema, 8k",
-                      "video_prompt": "Cinematic camera movement and character action",
-                      "camera_movement": "Travelling avant"
+                      "camera": "Travelling avant"
                     }
                   ]
                 }
-                Tu DOIS générer exactement $scenesInThisBatch scènes numérotées de $startScene à $endScene.
+                Génère exactement $scenesInThisBatch plans numérotés de $startScene à $endScene.
                 """.trimIndent()
             } else {
                 """
-                Tu es un réalisateur et scénariste de cinéma IA d'élite.
-                Tu poursuis l'écriture du film "$filmTitle".
-                Synopsis : "$filmLogline".
-
-                BIBLE DE COHÉRENCE ÉTABLIE (À RESPECTER STRICTEMENT POUR TOUS LES PLANS) :
-                - Personnage principal immuable : "$characterConsistency"
-                - Direction visuelle commune : "$visualConsistency"
-                - Dernier plan précédent (${allDrafts.lastOrNull()?.number ?: (startScene - 1)}) : "${allDrafts.lastOrNull()?.title}" - "${allDrafts.lastOrNull()?.description}"
-                - Dernières paroles prononcées : "${allDrafts.lastOrNull()?.dialogue}"
-
+                Tu es un réalisateur de cinéma IA d'élite. Poursuis le film "$filmTitle".
+                Continuité : Protagoniste: "$characterConsistency". Style: "$visualConsistency".
+                Dernier plan précédent : "${allDrafts.lastOrNull()?.title}" - "${allDrafts.lastOrNull()?.description}".
                 $langRule
                 $audioRule
 
-                Tu dois répondre exclusivement avec un objet JSON valide :
+                Réponds EXCLUSIVEMENT en JSON compact :
                 {
                   "scenes": [
                     {
                       "number": $startScene,
-                      "title": "Titre court de la scène",
-                      "description": "Description détaillée de la suite de l'action",
-                      "dialogue": "« Réplique continue en français »",
-                      "audio_mode": "$audioPresence",
-                      "image_prompt": "Prompt with consistent character and style, 9:16 vertical cinema, 8k",
-                      "video_prompt": "Smooth continuous camera movement and character action",
-                      "camera_movement": "Panoramique fluide"
+                      "title": "Titre court",
+                      "action": "Description concise de l'action",
+                      "dialogue": "« Réplique en français »",
+                      "camera": "Panoramique fluide"
                     }
                   ]
                 }
-                Tu DOIS générer exactement $scenesInThisBatch scènes numérotées de $startScene à $endScene dans la continuité narrative et vocale.
+                Génère exactement $scenesInThisBatch plans numérotés de $startScene à $endScene.
                 """.trimIndent()
             }
 
-            val userContent = "Projet : $prompt. Direction artistique : $style. Rédige les scènes de $startScene à $endScene avec dialogues en français cohérents."
+            val userContent = "Projet : $prompt. Direction : $style. Scènes $startScene à $endScene."
 
             var batchSuccess = false
-            for (attempt in 1..3) {
+            for (attempt in 1..2) {
                 if (stopRequested()) throw CancellationException("Annulé par l'utilisateur")
                 try {
                     val messages = JSONArray().apply {
@@ -573,7 +536,8 @@ class ApiClient(
                     val requestJson = JSONObject().apply {
                         put("model", "agnes-2.5-flash")
                         put("messages", messages)
-                        put("temperature", 0.7)
+                        put("temperature", 0.6)
+                        put("max_tokens", 3500)
                     }
 
                     val request = Request.Builder()
@@ -599,13 +563,13 @@ class ApiClient(
                             characterConsistency = if (extractedChar.isNotBlank()) {
                                 extractedChar
                             } else {
-                                "Protagoniste cinématographique principal aux traits distinctifs, coupe soignée et tenue détaillée cohérente ($style)"
+                                "Protagoniste cinématographique aux traits distinctifs, tenue détaillée ($style)"
                             }
                             val extractedVis = scriptJson.optString("visual_consistency", "")
                             visualConsistency = if (extractedVis.isNotBlank()) {
                                 extractedVis
                             } else {
-                                "Palette cinématographique $style, éclairage soigné, ratio 9:16 vertical cinema, 35mm grain, 8k"
+                                "Palette cinématographique $style, éclairage soigné, 9:16 vertical cinema, 35mm grain, 8k"
                             }
                         }
 
@@ -614,35 +578,31 @@ class ApiClient(
                             val sObj = scenesArray.getJSONObject(i)
                             val targetNum = startScene + i
                             val rawDiag = sObj.optString("dialogue", "")
-                            val desc = sObj.optString("description", "Plan $targetNum")
-                            val enforcedDialogue = enforceCleanDialogue(rawDiag, desc, dialogueLanguage, audioPresence, targetNum)
-
-                            val rawImg = sObj.optString("image_prompt", "")
-                            val unifiedImagePrompt = if (rawImg.isNotBlank()) {
-                                "[Protagonist: $characterConsistency], $rawImg, $visualConsistency, 9:16 vertical cinema, 8k"
-                            } else {
-                                "$prompt, [Protagonist: $characterConsistency], shot $targetNum: $desc, $visualConsistency, 9:16 vertical cinema, 8k"
-                            }
+                            val actionDesc = sObj.optString("action", sObj.optString("description", "Plan $targetNum"))
+                            val title = sObj.optString("title", "Plan $targetNum")
+                            val camMovement = sObj.optString("camera", sObj.optString("camera_movement", "Travelling avant"))
+                            val enforcedDialogue = enforceCleanDialogue(rawDiag, actionDesc, dialogueLanguage, audioPresence, targetNum)
 
                             val cleanDiagSpeech = enforcedDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
                             val audioDirective = when {
-                                audioPresence == "ambient" -> ", atmospheric cinema sound foley, characters remain silent, no speech"
-                                dialogueLanguage == "fr" -> ", Authentic Spoken French dialogue: \"$cleanDiagSpeech\", synchronized French lip sync, audible clear French voice, no English words"
+                                audioPresence == "ambient" -> ", atmospheric cinema sound design, silent characters"
+                                dialogueLanguage == "fr" -> ", Authentic Spoken French dialogue: \"$cleanDiagSpeech\", synchronized French lip sync, clear French voice, no English words"
                                 else -> ", Authentic Spoken English dialogue: \"$cleanDiagSpeech\", synchronized lip movement, clear speech"
                             }
-                            val rawVideo = sObj.optString("video_prompt", "Fluid cinematic camera movement for plan $targetNum")
-                            val unifiedVideoPrompt = "$rawVideo$audioDirective"
+
+                            val unifiedImagePrompt = "$prompt, [Protagonist: $characterConsistency], scene $targetNum: $title - $actionDesc, $visualConsistency, 9:16 vertical cinema, 8k"
+                            val unifiedVideoPrompt = "$camMovement, $actionDesc$audioDirective, cinematic motion, style $style"
 
                             allDrafts.add(
                                 GeneratedSceneDraft(
                                     number = sObj.optInt("number", targetNum),
-                                    title = sObj.optString("title", "Plan $targetNum"),
-                                    description = desc,
+                                    title = title,
+                                    description = actionDesc,
                                     imagePrompt = unifiedImagePrompt,
                                     videoPrompt = unifiedVideoPrompt,
-                                    cameraMovement = sObj.optString("camera_movement", "Travelling avant"),
+                                    cameraMovement = camMovement,
                                     dialogue = enforcedDialogue,
-                                    audioMode = sObj.optString("audio_mode", audioPresence),
+                                    audioMode = audioPresence,
                                     characterAnchor = characterConsistency
                                 )
                             )
@@ -666,7 +626,7 @@ class ApiClient(
                                     title = "Plan $nextNum",
                                     description = fallbackDesc,
                                     imagePrompt = "$prompt, [Protagonist: $characterConsistency], cinematic shot $nextNum, $visualConsistency, 9:16 vertical cinema, 8k",
-                                    videoPrompt = "Smooth cinematic tracking shot for plan $nextNum$audioDirective",
+                                    videoPrompt = "Travelling avant, $fallbackDesc$audioDirective, continuous motion",
                                     cameraMovement = "Travelling avant",
                                     dialogue = fallbackDialogue,
                                     audioMode = audioPresence,
@@ -682,8 +642,8 @@ class ApiClient(
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    TechnicalLogManager.log("PHASE_1", "Tentative $attempt/3 échouée sur le lot $startScene-$endScene : ${e.message}", "WARN")
-                    delay(1500L * attempt)
+                    TechnicalLogManager.log("PHASE_1", "Tentative $attempt/2 sur le lot $startScene-$endScene : ${e.message}", "WARN")
+                    delay(1000L * attempt)
                 }
             }
 
