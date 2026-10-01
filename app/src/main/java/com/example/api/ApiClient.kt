@@ -54,7 +54,9 @@ data class GeneratedSceneDraft(
     val cameraMovement: String,
     val dialogue: String = "",
     val audioMode: String = "dialogue",
-    val characterAnchor: String = ""
+    val characterAnchor: String = "",
+    val narrativePhase: String = "Développement",
+    val charactersPresent: String = ""
 )
 
 class ApiClient(
@@ -442,11 +444,13 @@ class ApiClient(
         val allDrafts = mutableListOf<GeneratedSceneDraft>()
         var filmTitle = "Film : " + prompt.take(30)
         var filmLogline = prompt
-        var characterConsistency = ""
+        var protagonistBible = ""
+        var supportingCastBible = ""
+        var antagonistBible = ""
         var visualConsistency = ""
 
         val langRule = if (dialogueLanguage == "fr") {
-            "DIALOGUES EN FRANÇAIS OBLIGATOIRES : Chaque scène DOIT avoir une réplique parlée ou une phrase de voix off en français complet dans 'dialogue', entre guillemets « ... ». Interdiction d'anglais et interdiction de réplique vide."
+            "DIALOGUES EN FRANÇAIS OBLIGATOIRES : Chaque scène DOIT avoir une réplique parlée ou une phrase de voix off en français complet dans 'dialogue', entre guillemets « ... ». Interdiction d'anglais et interdiction de réplique vide. Indique qui parle quand c'est pertinent (ex: « Elena : Attention ! »)."
         } else {
             "ENGLISH SPOKEN DIALOGUE: Every scene must have a spoken dialogue or voice-over in English in 'dialogue'."
         }
@@ -457,7 +461,7 @@ class ApiClient(
             else -> "Dialogues parlés vifs entre les personnages en français dans 'dialogue'."
         }
 
-        TechnicalLogManager.log("PHASE_1", "POST $AGNES_CHAT_URL - Écriture scénario haute vitesse ($numScenes scènes en $totalBatches lot(s), langue: $dialogueLanguage)")
+        TechnicalLogManager.log("PHASE_1", "POST $AGNES_CHAT_URL - Écriture scénario studio ($numScenes scènes en $totalBatches lot(s), langue: $dialogueLanguage)")
 
         for (batchIndex in 0 until totalBatches) {
             if (stopRequested()) {
@@ -471,33 +475,57 @@ class ApiClient(
             val currentPct = 15 + ((batchIndex + 1) * 5 / totalBatches)
             onProgressUpdate?.invoke(
                 currentPct,
-                "Phase 1 : Écriture du scénario (plans $startScene à $endScene / $numScenes)..."
+                "Phase 1 : Conception scénaristique Studio ($startScene à $endScene / $numScenes plans)..."
             )
 
             val systemPrompt = if (batchIndex == 0) {
                 """
-                Tu es un réalisateur et scénariste de cinéma IA d'élite.
-                Génère le découpage scénaristique cinématographique ultra-dynamique.
+                Tu es un showrunner et grand réalisateur de cinéma de studio.
+                Tu dois concevoir un film captivant, rythmé et accessible à tous, digne des plus grands studios de cinéma mondiaux.
+                L'histoire doit être passionnante mais FACILE À COMPRENDRE, avec un fil conducteur évident et des enjeux clairs dès les premières secondes.
 
-                CONSIGNES STRICTES :
-                1. 'character_consistency' : Décris le protagoniste principal de façon immuable (visage, cheveux, tenue vestimentaire précise avec couleurs).
-                2. 'visual_consistency' : Palette de couleurs, lumière et texture cinématographique 35mm.
-                3. $langRule
-                4. $audioRule
+                STRUCTURE NARRATIVE OBLIGATOIRE EN 4 ACTES (pour les $numScenes plans) :
+                - ACTE 1 : INTRODUCTION (plans 1 à ~25%) :
+                  * Plan 1 OBLIGATOIRE : Grand plan d'ensemble large du monde, ville, décor ou paysage immersif (SANS focalisation sur un personnage), pour poser l'ambiance et l'univers.
+                  * Plans suivants de l'Acte 1 : Présentation du protagoniste dans son quotidien, puis arrivée rapide de l'élément déclencheur qui démarre la quête.
+                - ACTE 2 : DÉVELOPPEMENT & PÉRIPÉTIES (plans ~26% à ~70%) :
+                  * Progression dynamique et limpide de l'intrigue.
+                  * VARIÉTÉ DU CASTING OBLIGATOIRE : Ne PAS centrer tous les plans sur le héros seul ! Alternez les points de vue : scènes centrées sur l'allié/secondaire, scènes centrées sur l'antagoniste/menace (réactions, complots), scènes de duo et contre-champs.
+                - ACTE 3 : CLIMAX (plans ~71% à ~85%) :
+                  * Confrontation majeure, moment décisif où les destins se croisent, intensité dramatique ou action spectaculaire au sommet.
+                - ACTE 4 : CONCLUSION & RÉSOLUTION (plans ~86% à 100%) :
+                  * Dénouement émotionnel limpide et satisfaisant, conséquence morale ou victoire éclatante, plan final mémorable de clôture.
 
-                Réponds EXCLUSIVEMENT en JSON compact sans markdown :
+                CASTING STUDIO & COHÉRENCE FOLLE DES PERSONNAGES :
+                - Ne focalise JAMAIS tout le film uniquement sur le héros principal ! Une vraie production de studio intègre plusieurs figures marquantes.
+                - 'protagonist_bible' : Nom + description physique immuable et ultra-précise du héros (genre, visage, coiffure immuable, tenue vestimentaire invariable avec couleurs précises, accessoire signature).
+                - 'supporting_cast_bible' : Nom + rôle (allié, mentor ou complice) + description physique invariable au look contrasté (tenue et couleurs distinctives).
+                - 'antagonist_bible' : Nom + rôle (antagoniste, rival ou menace) + allure frappante, tenue sombre ou distinctive invariable.
+                - 'visual_consistency' : Palette chromatique $style, texture 35mm, ratio 9:16 vertical cinema, éclairage soigné, 8k.
+
+                RÈGLES DE DIALOGUE :
+                $langRule
+                $audioRule
+                Dans 'dialogue', indique qui parle (ex: « Elena : Attention derrière toi ! » ou « Marcus : Vous arrivez trop tard. » ou « Voix off : Tout a basculé en cet instant... »).
+
+                Réponds EXCLUSIVEMENT en JSON compact sans balises markdown :
                 {
-                  "film_title": "Titre cinématographique",
-                  "logline": "Accroche en une phrase",
-                  "character_consistency": "Description permanente du protagoniste",
+                  "film_title": "Titre cinématographique percutant",
+                  "logline": "Accroche en une phrase résumant l'arc narratif limpide",
+                  "protagonist_bible": "Description physique permanente et invariable du héros",
+                  "supporting_cast_bible": "Description physique permanente et invariable de l'allié / personnage secondaire",
+                  "antagonist_bible": "Description physique permanente et invariable de l'antagoniste / rival",
                   "visual_consistency": "Charte visuelle commune ($style)",
                   "scenes": [
                     {
                       "number": 1,
-                      "title": "Titre court",
-                      "action": "Description concise de l'action du plan",
-                      "dialogue": "« Réplique en français »",
-                      "camera": "Travelling avant"
+                      "act": "INTRODUCTION",
+                      "shot_type": "Plan d'ensemble large",
+                      "characters_present": "Décor seul / Monde immersif",
+                      "title": "Titre court du plan",
+                      "action": "Description visuelle cinématographique précise du plan",
+                      "dialogue": "Voix off : « Réplique d'ouverture en français »",
+                      "camera": "Travelling aérien lent"
                     }
                   ]
                 }
@@ -505,9 +533,17 @@ class ApiClient(
                 """.trimIndent()
             } else {
                 """
-                Tu es un réalisateur de cinéma IA d'élite. Poursuis le film "$filmTitle".
-                Continuité : Protagoniste: "$characterConsistency". Style: "$visualConsistency".
-                Dernier plan précédent : "${allDrafts.lastOrNull()?.title}" - "${allDrafts.lastOrNull()?.description}".
+                Tu es un réalisateur de studio de renommée mondiale. Poursuis le film "$filmTitle".
+                CASTING IMMUABLE :
+                - Protagoniste : "$protagonistBible"
+                - Allié / Secondaire : "$supportingCastBible"
+                - Antagoniste : "$antagonistBible"
+                - Style : "$visualConsistency"
+                Dernier plan précédent : "${allDrafts.lastOrNull()?.title}" - "${allDrafts.lastOrNull()?.description}" (${allDrafts.lastOrNull()?.narrativePhase}).
+
+                PROGRESSION DRAMATIQUE STUDIO :
+                Poursuis la structure narrative en 4 actes (Développement, Climax ou Conclusion selon le numéro de plan).
+                RAPPEL CRUCIAL : Varie les personnages présents et les points de vue (scènes centrées sur l'antagoniste, scènes centrées sur l'allié, scènes de duo ou plans d'ambiance) tout en gardant une cohérence folle grâce aux bibles de personnages !
                 $langRule
                 $audioRule
 
@@ -516,10 +552,13 @@ class ApiClient(
                   "scenes": [
                     {
                       "number": $startScene,
+                      "act": "DÉVELOPPEMENT",
+                      "shot_type": "Plan moyen dialogue",
+                      "characters_present": "Allié / Secondaire",
                       "title": "Titre court",
                       "action": "Description concise de l'action",
                       "dialogue": "« Réplique en français »",
-                      "camera": "Panoramique fluide"
+                      "camera": "Plan fixe immersif"
                     }
                   ]
                 }
@@ -564,11 +603,23 @@ class ApiClient(
                         if (batchIndex == 0) {
                             filmTitle = scriptJson.optString("film_title", filmTitle)
                             filmLogline = scriptJson.optString("logline", filmLogline)
-                            val extractedChar = scriptJson.optString("character_consistency", "")
-                            characterConsistency = if (extractedChar.isNotBlank()) {
-                                extractedChar
+                            val extractedProtagonist = scriptJson.optString("protagonist_bible", scriptJson.optString("character_consistency", ""))
+                            protagonistBible = if (extractedProtagonist.isNotBlank()) {
+                                extractedProtagonist
                             } else {
-                                "Protagoniste cinématographique aux traits distinctifs, tenue détaillée ($style)"
+                                "Héros principal aux traits cinématographiques distinctifs, tenue invariable détaillée ($style)"
+                            }
+                            val extractedSecondary = scriptJson.optString("supporting_cast_bible", "")
+                            supportingCastBible = if (extractedSecondary.isNotBlank()) {
+                                extractedSecondary
+                            } else {
+                                "Personnage allié au look contrasté et tenue spécifique invariable ($style)"
+                            }
+                            val extractedAntagonist = scriptJson.optString("antagonist_bible", "")
+                            antagonistBible = if (extractedAntagonist.isNotBlank()) {
+                                extractedAntagonist
+                            } else {
+                                "Antagoniste marquant à l'aura menaçante et costume sombre invariable ($style)"
                             }
                             val extractedVis = scriptJson.optString("visual_consistency", "")
                             visualConsistency = if (extractedVis.isNotBlank()) {
@@ -588,6 +639,56 @@ class ApiClient(
                             val camMovement = sObj.optString("camera", sObj.optString("camera_movement", "Travelling avant"))
                             val enforcedDialogue = enforceCleanDialogue(rawDiag, actionDesc, dialogueLanguage, audioPresence, targetNum)
 
+                            val charsPresent = sObj.optString("characters_present", sObj.optString("characters", ""))
+                            val defaultAct = when {
+                                targetNum <= (numScenes * 0.25).toInt().coerceAtLeast(1) -> "INTRODUCTION"
+                                targetNum <= (numScenes * 0.70).toInt().coerceAtLeast(2) -> "DÉVELOPPEMENT"
+                                targetNum <= (numScenes * 0.85).toInt().coerceAtLeast(3) -> "CLIMAX"
+                                else -> "CONCLUSION"
+                            }
+                            val act = sObj.optString("act", defaultAct).uppercase()
+                            val shotType = sObj.optString("shot_type", if (targetNum == 1) "Plan d'ensemble large" else "Plan moyen")
+
+                            val isNoCharacter = charsPresent.contains("aucun", ignoreCase = true) ||
+                                charsPresent.contains("décor", ignoreCase = true) ||
+                                charsPresent.contains("paysage", ignoreCase = true) ||
+                                charsPresent.contains("monde", ignoreCase = true) ||
+                                charsPresent.contains("none", ignoreCase = true) ||
+                                (targetNum == 1 && shotType.contains("ensemble", ignoreCase = true))
+
+                            val isAntagonistOnly = !isNoCharacter && (
+                                charsPresent.contains("antagoniste", ignoreCase = true) ||
+                                charsPresent.contains("rival", ignoreCase = true) ||
+                                charsPresent.contains("ennemi", ignoreCase = true)
+                            )
+
+                            val isSecondaryOnly = !isNoCharacter && !isAntagonistOnly && (
+                                charsPresent.contains("secondaire", ignoreCase = true) ||
+                                charsPresent.contains("allié", ignoreCase = true) ||
+                                charsPresent.contains("mentor", ignoreCase = true) ||
+                                charsPresent.contains("compagnon", ignoreCase = true)
+                            )
+
+                            val isConfrontation = !isNoCharacter && (
+                                charsPresent.contains("confrontation", ignoreCase = true) ||
+                                (charsPresent.contains("antagoniste", ignoreCase = true) && charsPresent.contains("protagoniste", ignoreCase = true))
+                            )
+
+                            val isDuo = !isNoCharacter && !isConfrontation && (
+                                charsPresent.contains("duo", ignoreCase = true) ||
+                                charsPresent.contains(" et ", ignoreCase = true) ||
+                                charsPresent.contains("&")
+                            )
+
+                            val sceneCharacterAnchor = when {
+                                isNoCharacter -> "Cinematic scenery, environmental and architectural details without characters"
+                                isConfrontation && antagonistBible.isNotBlank() -> "[Protagonist: $protagonistBible] confronting [Antagonist: $antagonistBible]"
+                                isDuo && supportingCastBible.isNotBlank() -> "[Protagonist: $protagonistBible] together with [Ally: $supportingCastBible]"
+                                isAntagonistOnly && antagonistBible.isNotBlank() -> "[Antagonist: $antagonistBible]"
+                                isSecondaryOnly && supportingCastBible.isNotBlank() -> "[Ally/Supporting: $supportingCastBible]"
+                                else -> "[Protagonist: $protagonistBible]"
+                            }
+
                             val cleanDiagSpeech = enforcedDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
                             val audioDirective = when {
                                 audioPresence == "ambient" -> ", atmospheric cinema sound design, silent characters"
@@ -595,7 +696,20 @@ class ApiClient(
                                 else -> ", Authentic Spoken English dialogue: \"$cleanDiagSpeech\", synchronized lip movement, clear speech"
                             }
 
-                            val unifiedImagePrompt = "$prompt, [Protagonist: $characterConsistency], scene $targetNum: $title - $actionDesc, $visualConsistency, 9:16 vertical cinema, 8k"
+                            val charactersPresentLabel = when {
+                                isNoCharacter -> "Décor / Ambiance"
+                                isConfrontation -> "Face-à-face (Protagoniste & Antagoniste)"
+                                isDuo -> "Duo (Protagoniste & Allié)"
+                                isAntagonistOnly -> "Antagoniste / Menace"
+                                isSecondaryOnly -> "Allié / Secondaire"
+                                else -> "Protagoniste"
+                            }
+
+                            val unifiedImagePrompt = if (isNoCharacter) {
+                                "$prompt, [Atmospheric Scenery - No People], scène $targetNum [$act - $shotType]: $title - $actionDesc, $visualConsistency, 9:16 vertical cinema, 8k"
+                            } else {
+                                "$prompt, [Character Bible: $sceneCharacterAnchor], scène $targetNum [$act - $shotType]: $title - $actionDesc, $visualConsistency, 9:16 vertical cinema, 8k"
+                            }
                             val unifiedVideoPrompt = "$camMovement, $actionDesc$audioDirective, cinematic motion, style $style"
 
                             allDrafts.add(
@@ -608,15 +722,23 @@ class ApiClient(
                                     cameraMovement = camMovement,
                                     dialogue = enforcedDialogue,
                                     audioMode = audioPresence,
-                                    characterAnchor = characterConsistency
+                                    characterAnchor = sceneCharacterAnchor,
+                                    narrativePhase = act,
+                                    charactersPresent = charactersPresentLabel
                                 )
                             )
                         }
 
-                        // Compléter si le lot est incomplet
+                        // Compléter si le lot est incomplet avec alternance studio
                         while (allDrafts.size < endScene) {
                             val nextNum = allDrafts.size + 1
-                            val fallbackDesc = "Développement narratif du plan $nextNum"
+                            val defaultAct = when {
+                                nextNum <= (numScenes * 0.25).toInt().coerceAtLeast(1) -> "INTRODUCTION"
+                                nextNum <= (numScenes * 0.70).toInt().coerceAtLeast(2) -> "DÉVELOPPEMENT"
+                                nextNum <= (numScenes * 0.85).toInt().coerceAtLeast(3) -> "CLIMAX"
+                                else -> "CONCLUSION"
+                            }
+                            val fallbackDesc = "Progression dramatique ($defaultAct) - Plan $nextNum"
                             val fallbackDialogue = enforceCleanDialogue("", fallbackDesc, dialogueLanguage, audioPresence, nextNum)
                             val cleanSpeech = fallbackDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
                             val audioDirective = if (dialogueLanguage == "fr") {
@@ -625,17 +747,32 @@ class ApiClient(
                                 ", Authentic Spoken English dialogue: \"$cleanSpeech\", synchronized lip movement"
                             }
 
+                            val isSecFallback = nextNum % 3 == 0 && supportingCastBible.isNotBlank()
+                            val isAntagFallback = nextNum % 4 == 0 && antagonistBible.isNotBlank()
+                            val fallbackAnchor = when {
+                                isAntagFallback -> "[Antagonist: $antagonistBible]"
+                                isSecFallback -> "[Ally/Supporting: $supportingCastBible]"
+                                else -> "[Protagonist: $protagonistBible]"
+                            }
+                            val charLabel = when {
+                                isAntagFallback -> "Antagoniste / Menace"
+                                isSecFallback -> "Allié / Secondaire"
+                                else -> "Protagoniste"
+                            }
+
                             allDrafts.add(
                                 GeneratedSceneDraft(
                                     number = nextNum,
-                                    title = "Plan $nextNum",
+                                    title = "Plan $nextNum : Séquence $charLabel",
                                     description = fallbackDesc,
-                                    imagePrompt = "$prompt, [Protagonist: $characterConsistency], cinematic shot $nextNum, $visualConsistency, 9:16 vertical cinema, 8k",
+                                    imagePrompt = "$prompt, [Character Bible: $fallbackAnchor], scène $nextNum [$defaultAct]: $fallbackDesc, $visualConsistency, 9:16 vertical cinema, 8k",
                                     videoPrompt = "Travelling avant, $fallbackDesc$audioDirective, continuous motion",
                                     cameraMovement = "Travelling avant",
                                     dialogue = fallbackDialogue,
                                     audioMode = audioPresence,
-                                    characterAnchor = characterConsistency
+                                    characterAnchor = fallbackAnchor,
+                                    narrativePhase = defaultAct,
+                                    charactersPresent = charLabel
                                 )
                             )
                         }
@@ -655,7 +792,13 @@ class ApiClient(
             if (!batchSuccess) {
                 TechnicalLogManager.log("PHASE_1", "Génération procédurale de secours pour les scènes $startScene à $endScene", "WARN")
                 for (n in startScene..endScene) {
-                    val fallbackDesc = "Développement de l'intrigue du projet $filmTitle (Plan $n)"
+                    val defaultAct = when {
+                        n <= (numScenes * 0.25).toInt().coerceAtLeast(1) -> "INTRODUCTION"
+                        n <= (numScenes * 0.70).toInt().coerceAtLeast(2) -> "DÉVELOPPEMENT"
+                        n <= (numScenes * 0.85).toInt().coerceAtLeast(3) -> "CLIMAX"
+                        else -> "CONCLUSION"
+                    }
+                    val fallbackDesc = "Développement de l'intrigue ($defaultAct) - Plan $n"
                     val fallbackDialogue = enforceCleanDialogue("", fallbackDesc, dialogueLanguage, audioPresence, n)
                     val cleanSpeech = fallbackDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
                     val audioDirective = if (dialogueLanguage == "fr") {
@@ -664,17 +807,35 @@ class ApiClient(
                         ", Authentic Spoken English dialogue: \"$cleanSpeech\", synchronized lip movement"
                     }
 
+                    val isNoCharFallback = n == 1
+                    val isSecFallback = !isNoCharFallback && n % 3 == 0 && supportingCastBible.isNotBlank()
+                    val isAntagFallback = !isNoCharFallback && n % 4 == 0 && antagonistBible.isNotBlank()
+                    val fallbackAnchor = when {
+                        isNoCharFallback -> "Cinematic scenery, environmental and architectural details without characters"
+                        isAntagFallback -> "[Antagonist: $antagonistBible]"
+                        isSecFallback -> "[Ally/Supporting: $supportingCastBible]"
+                        else -> "[Protagonist: $protagonistBible]"
+                    }
+                    val charLabel = when {
+                        isNoCharFallback -> "Décor / Ambiance"
+                        isAntagFallback -> "Antagoniste / Menace"
+                        isSecFallback -> "Allié / Secondaire"
+                        else -> "Protagoniste"
+                    }
+
                     allDrafts.add(
                         GeneratedSceneDraft(
                             number = n,
-                            title = "Plan $n : Séquence cinématique",
+                            title = "Plan $n : Séquence $charLabel",
                             description = fallbackDesc,
-                            imagePrompt = "$prompt, [Character: $characterConsistency], plan $n, highly detailed cinematic shot, $visualConsistency, 9:16 vertical cinema, 8k",
+                            imagePrompt = "$prompt, [Character Bible: $fallbackAnchor], plan $n [$defaultAct], $visualConsistency, 9:16 vertical cinema, 8k",
                             videoPrompt = "Continuous smooth camera motion, cinematic tracking shot$audioDirective",
                             cameraMovement = if (n % 2 == 0) "Panoramique fluide" else "Travelling avant",
                             dialogue = fallbackDialogue,
                             audioMode = audioPresence,
-                            characterAnchor = characterConsistency
+                            characterAnchor = fallbackAnchor,
+                            narrativePhase = defaultAct,
+                            charactersPresent = charLabel
                         )
                     )
                 }
@@ -682,8 +843,13 @@ class ApiClient(
         }
 
         usageTracker.recordTextRequest()
-        TechnicalLogManager.log("PHASE_1", "Scénario complet finalisé avec succès: ${allDrafts.size} scènes générées (cohérence de personnage garantie, langue $dialogueLanguage)")
-        return@withContext ApiResponse.Success(ScriptGenerationResult(filmTitle, filmLogline, characterConsistency, visualConsistency, allDrafts))
+        TechnicalLogManager.log("PHASE_1", "Scénario complet finalisé avec succès: ${allDrafts.size} scènes générées (structure 4 actes, casting varié, langue $dialogueLanguage)")
+        val finalCharacterConsistency = buildString {
+            append("Protagoniste: $protagonistBible")
+            if (supportingCastBible.isNotBlank()) append(" | Allié: $supportingCastBible")
+            if (antagonistBible.isNotBlank()) append(" | Antagoniste: $antagonistBible")
+        }
+        return@withContext ApiResponse.Success(ScriptGenerationResult(filmTitle, filmLogline, finalCharacterConsistency, visualConsistency, allDrafts))
     }
 
     /**

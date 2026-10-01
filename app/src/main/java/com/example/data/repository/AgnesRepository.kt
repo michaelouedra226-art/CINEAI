@@ -474,7 +474,9 @@ class AgnesRepository(
                     videoUrl = null,
                     dialogue = d.dialogue,
                     audioMode = d.audioMode,
-                    characterAnchor = d.characterAnchor
+                    characterAnchor = d.characterAnchor,
+                    narrativePhase = d.narrativePhase,
+                    charactersPresent = d.charactersPresent
                 )
             }.toMutableList()
         }
@@ -573,12 +575,16 @@ class AgnesRepository(
                 "[Character: ${sc.characterAnchor}], "
             } else ""
 
+            val isCustomStartImage = (i == 0 && startImage.isNotBlank())
+            val startUrl = if (isCustomStartImage) startImage else (currentKeyframe.ifBlank { previousFrameUrl })
+            val endUrl: String? = null // Animation directe depuis la keyframe du plan pour préserver l'identité du personnage
+
             val videoInit = apiClient.initiateVideo(
                 apiKey = settings.apiKey,
                 profile = settings.rateLimitProfile,
-                prompt = "$charPrefix${sc.video_prompt}$dialogueDirective, continuité fluide, style $filmStyle",
-                startImageUrl = previousFrameUrl,
-                endImageUrl = currentKeyframe,
+                prompt = "$charPrefix${sc.video_prompt}$dialogueDirective, style $filmStyle",
+                startImageUrl = startUrl,
+                endImageUrl = endUrl,
                 durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
                 numFrames = breakdown.framesPerScene,
                 resolution = "720p 9:16",
@@ -702,7 +708,9 @@ class AgnesRepository(
                 videoUrl = null,
                 dialogue = d.dialogue,
                 audioMode = d.audioMode,
-                characterAnchor = d.characterAnchor
+                characterAnchor = d.characterAnchor,
+                narrativePhase = d.narrativePhase,
+                charactersPresent = d.charactersPresent
             )
         }
         Pair(scriptRes.data.title, scenes)
@@ -786,12 +794,16 @@ class AgnesRepository(
                     "[Character: ${sc.characterAnchor}], "
                 } else ""
 
+                val isCustomStartImage = (i == 0 && film.startImage.isNotBlank())
+                val startUrl = if (isCustomStartImage) film.startImage else (currentKeyframe.ifBlank { previousFrameUrl })
+                val endUrl: String? = null // Animation directe sans morphing croisé
+
                 val videoInit = apiClient.initiateVideo(
                     apiKey = settings.apiKey,
                     profile = settings.rateLimitProfile,
-                    prompt = "$charPrefix${sc.video_prompt}$dialogueDirective, continuité fluide, style ${film.filmStyle}",
-                    startImageUrl = previousFrameUrl,
-                    endImageUrl = currentKeyframe,
+                    prompt = "$charPrefix${sc.video_prompt}$dialogueDirective, style ${film.filmStyle}",
+                    startImageUrl = startUrl,
+                    endImageUrl = endUrl,
                     durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
                     numFrames = breakdown.framesPerScene,
                     resolution = "720p 9:16",

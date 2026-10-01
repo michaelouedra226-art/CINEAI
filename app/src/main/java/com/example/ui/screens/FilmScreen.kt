@@ -450,12 +450,44 @@ fun FilmScreen(
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = scene.camera_movement,
-                                    color = Color(0xFF9CA3AF),
-                                    fontSize = 11.sp
-                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    if (scene.narrativePhase.isNotBlank()) {
+                                        val act = scene.narrativePhase.uppercase()
+                                        val (actColor, actBg) = when {
+                                            act.contains("INTRO") -> Color(0xFF38BDF8) to Color(0xFF0C4A6E)
+                                            act.contains("CLIMAX") -> Color(0xFFFB923C) to Color(0xFF431407)
+                                            act.contains("CONCL") || act.contains("RÉSOL") -> Color(0xFF34D399) to Color(0xFF064E3B)
+                                            else -> Color(0xFFA78BFA) to Color(0xFF2E1065)
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(actBg)
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(text = act, color = actColor, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                    if (scene.charactersPresent.isNotBlank()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color(0xFF1E1E28))
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(text = scene.charactersPresent, color = Color(0xFFD4D4D8), fontSize = 8.sp)
+                                        }
+                                    }
+                                    Text(
+                                        text = "• ${scene.camera_movement}",
+                                        color = Color(0xFF9CA3AF),
+                                        fontSize = 10.sp
+                                    )
+                                }
                                 if (scene.progressText.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
@@ -529,8 +561,8 @@ fun FilmScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(text = "Étape B : Découpage", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(text = "${draftScenes.size} scènes générées • modifiez les prompts avant production", color = Color(0xFFA78BFA), fontSize = 11.sp)
+                    Text(text = "Étape B : Découpage Studio", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "${draftScenes.size} scènes • Structure 4 Actes & Casting varié", color = Color(0xFFA78BFA), fontSize = 11.sp)
                 }
 
                 Box(
@@ -544,6 +576,30 @@ fun FilmScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Bannière de rappel Structure & Cohérence
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF161522),
+                border = BorderStroke(1.dp, Color(0xFF2C2540))
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AgnesSvgIcon(icon = AgnesIcon.FILM, tint = Color(0xFFA78BFA), size = 18.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Rendu Studio : Les plans alternent entre décors immersifs, protagoniste, alliés et antagonistes avec une cohérence visuelle stricte.",
+                        color = Color(0xFFC4B5FD),
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             LazyColumn(
@@ -551,6 +607,23 @@ fun FilmScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 itemsIndexed(draftScenes) { index, sc ->
+                    val act = sc.narrativePhase.uppercase()
+                    val (actColor, actBg) = when {
+                        act.contains("INTRO") -> Color(0xFF38BDF8) to Color(0xFF0C4A6E)
+                        act.contains("CLIMAX") -> Color(0xFFFB923C) to Color(0xFF431407)
+                        act.contains("CONCL") || act.contains("RÉSOL") -> Color(0xFF34D399) to Color(0xFF064E3B)
+                        else -> Color(0xFFA78BFA) to Color(0xFF2E1065)
+                    }
+
+                    val charPresent = sc.charactersPresent.ifBlank { "Protagoniste" }
+                    val (charColor, charBg) = when {
+                        charPresent.contains("Décor", ignoreCase = true) -> Color(0xFF94A3B8) to Color(0xFF1E293B)
+                        charPresent.contains("Antagoniste", ignoreCase = true) || charPresent.contains("Menace", ignoreCase = true) -> Color(0xFFF87171) to Color(0xFF450A0A)
+                        charPresent.contains("Allié", ignoreCase = true) || charPresent.contains("Secondaire", ignoreCase = true) -> Color(0xFFFBBF24) to Color(0xFF451A03)
+                        charPresent.contains("Duo", ignoreCase = true) || charPresent.contains("Face", ignoreCase = true) -> Color(0xFFE879F9) to Color(0xFF4A044E)
+                        else -> Color(0xFF818CF8) to Color(0xFF1E1B4B)
+                    }
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -568,19 +641,49 @@ fun FilmScreen(
                                 text = "Scène ${sc.number} : ${sc.title}",
                                 color = Color.White,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
                             )
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(Color(0xFF24153A))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(sc.camera_movement, color = Color(0xFFA78BFA), fontSize = 9.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(actBg)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(act, color = actColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF24153A))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(sc.camera_movement, color = Color(0xFFA78BFA), fontSize = 9.sp)
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
+
+                        // Badge Personnages présents
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(charBg)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Personnage(s) : $charPresent",
+                                    color = charColor,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(text = "Paroles / Dialogue (Français) :", color = Color(0xFFA78BFA), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                         OutlinedTextField(
                             value = sc.dialogue,
@@ -601,6 +704,34 @@ fun FilmScreen(
                             ),
                             shape = RoundedCornerShape(8.dp)
                         )
+
+                        // Ancre de cohérence personnage (Bible visuelle)
+                        if (sc.characterAnchor.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = "Cohérence Personnage / Bible visuelle :", color = Color(0xFFA1A1AA), fontSize = 10.sp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "• Identité immuable", color = Color(0xFF10B981), fontSize = 9.sp)
+                            }
+                            OutlinedTextField(
+                                value = sc.characterAnchor,
+                                onValueChange = { newAnchor ->
+                                    val updated = draftScenes.toMutableList()
+                                    updated[index] = sc.copy(characterAnchor = newAnchor)
+                                    draftScenes = updated
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = Color(0xFF191924),
+                                    unfocusedContainerColor = Color(0xFF191924),
+                                    focusedBorderColor = Color(0xFF7C3AED),
+                                    unfocusedBorderColor = Color(0xFF2C2C3C),
+                                    focusedTextColor = Color(0xFFD4D4D8),
+                                    unfocusedTextColor = Color(0xFFD4D4D8)
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(text = "Prompt Image (Keyframe) :", color = Color(0xFFA1A1AA), fontSize = 10.sp)
@@ -691,6 +822,34 @@ fun FilmScreen(
                 color = Color(0xFFA1A1AA),
                 fontSize = 12.sp
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF131320),
+                border = BorderStroke(1.dp, Color(0xFF282845))
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AgnesSvgIcon(icon = AgnesIcon.FILM, tint = Color(0xFFA78BFA), size = 16.dp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Production Studio & Casting Équilibré",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "• Structure 4 Actes : Introduction (plans larges & quotidien), Développement (péripéties), Climax (confrontation), Conclusion (dénouement limpide).\n• Variété du casting : Ne focalise pas tout sur le héros ! Scènes d'ambiance, alliés et antagonistes avec bibles visuelles immuables pour une cohérence folle.",
+                        color = Color(0xFFBBBBD0),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
 
             // Bannière de reprise si un projet a été interrompu
             val pendingFilm = recentFilms.firstOrNull { it.status in listOf("partial", "failed", "processing") }
