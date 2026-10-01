@@ -513,9 +513,13 @@ class AgnesRepository(
             onSceneUpdate?.invoke(sceneItems, pct, "Phase 2 : Génération Keyframe ${i + 1}/$numScenes (continuité personnage)...")
 
             val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.image_prompt.contains(sc.characterAnchor)) {
-                "[MASTER CONTINUITY: ${sc.characterAnchor}, identical face structure and signature outfit], "
+                "[MASTER CONTINUITY: ${sc.characterAnchor}, identical facial features and clothing], "
             } else ""
-            val keyframePrompt = "$charPrefix${sc.image_prompt}, master studio keyframe, style $filmStyle, 35mm anamorphic lens, volumetric lighting, 9:16 vertical cinema, 8k"
+            val keyframePrompt = if (sc.image_prompt.contains("35mm", ignoreCase = true)) {
+                "$charPrefix${sc.image_prompt}, style $filmStyle, 9:16 vertical format"
+            } else {
+                "$charPrefix${sc.image_prompt}, shot on 35mm film, natural realistic lighting, authentic human texture and skin tones, style $filmStyle, 9:16 vertical format"
+            }
             val imgRes = apiClient.generateImage(
                 apiKey = settings.apiKey,
                 prompt = keyframePrompt,
@@ -559,32 +563,16 @@ class AgnesRepository(
             sceneItems[i] = sc.copy(status = "processing", progressText = "Rendu vidéo scène ${sc.number}...")
             onSceneUpdate?.invoke(sceneItems, pctBase, "Phase 3 : Synthèse vidéo scène ${sc.number}/$numScenes (dialogue ${dialogueLanguage.uppercase()})...")
 
-            val cleanDiag = sc.dialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
-            val soundTrack = if (sc.soundDesign.isNotBlank()) sc.soundDesign else "ambiance sonore immersive et nappe orchestrale"
-            val dialogueDirective = when {
-                sc.audioMode == "ambient" -> ", immersive cinema sound design: $soundTrack, layered spatial acoustic foley, dynamic orchestral score, silent characters"
-                dialogueLanguage == "fr" -> {
-                    val speechText = if (cleanDiag.isNotBlank()) cleanDiag else "Nous avançons vers l'objectif sans faiblir."
-                    ", Authentic Spoken French dialogue with studio vocal resonance: \"$speechText\", perfectly synchronized French lip sync, natural expressive French voice acting, high fidelity sound design: $soundTrack, 48kHz studio audio master, no English words"
-                }
-                else -> {
-                    val speechText = if (cleanDiag.isNotBlank()) cleanDiag else "We must keep moving forward."
-                    ", Authentic Spoken English dialogue with studio resonance: \"$speechText\", synchronized lip movement, clear expressive voice, high fidelity sound design: $soundTrack"
-                }
-            }
-
-            val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.video_prompt.contains(sc.characterAnchor)) {
-                "[Character: ${sc.characterAnchor}], "
-            } else ""
-
             val isCustomStartImage = (i == 0 && startImage.isNotBlank())
             val startUrl = if (isCustomStartImage) startImage else (currentKeyframe.ifBlank { previousFrameUrl })
             val endUrl = currentKeyframe.ifBlank { startUrl }
 
+            val cleanVideoPrompt = buildCleanVideoPrompt(sc, filmStyle, dialogueLanguage)
+
             val videoInit = apiClient.initiateVideo(
                 apiKey = settings.apiKey,
                 profile = settings.rateLimitProfile,
-                prompt = "$charPrefix${sc.video_prompt}$dialogueDirective, style $filmStyle",
+                prompt = cleanVideoPrompt,
                 startImageUrl = startUrl,
                 endImageUrl = endUrl,
                 durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
@@ -784,28 +772,16 @@ class AgnesRepository(
                 sceneItems[i] = sc.copy(status = "processing", progressText = "Rendu vidéo scène ${sc.number}...")
                 onSceneUpdate?.invoke(sceneItems, pctBase, "Scène ${sc.number}/$numScenes (reprise synchro)...")
 
-                val cleanDiag = sc.dialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
-                val soundTrack = if (sc.soundDesign.isNotBlank()) sc.soundDesign else "ambiance sonore immersive et nappe orchestrale"
-                val dialogueDirective = when {
-                    sc.audioMode == "ambient" -> ", immersive cinema sound design: $soundTrack, layered spatial acoustic foley, dynamic orchestral score, silent characters"
-                    else -> {
-                        val speechText = if (cleanDiag.isNotBlank()) cleanDiag else "Nous avançons vers l'objectif sans faiblir."
-                        ", Authentic Spoken French dialogue with studio vocal resonance: \"$speechText\", perfectly synchronized French lip sync, natural expressive French voice acting, high fidelity sound design: $soundTrack, 48kHz studio audio master, no English words"
-                    }
-                }
-
-                val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.video_prompt.contains(sc.characterAnchor)) {
-                    "[Character: ${sc.characterAnchor}], "
-                } else ""
-
                 val isCustomStartImage = (i == 0 && film.startImage.isNotBlank())
                 val startUrl = if (isCustomStartImage) film.startImage else (currentKeyframe.ifBlank { previousFrameUrl })
                 val endUrl = currentKeyframe.ifBlank { startUrl }
 
+                val cleanVideoPrompt = buildCleanVideoPrompt(sc, film.filmStyle, "fr")
+
                 val videoInit = apiClient.initiateVideo(
                     apiKey = settings.apiKey,
                     profile = settings.rateLimitProfile,
-                    prompt = "$charPrefix${sc.video_prompt}$dialogueDirective, style ${film.filmStyle}",
+                    prompt = cleanVideoPrompt,
                     startImageUrl = startUrl,
                     endImageUrl = endUrl,
                     durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
@@ -865,5 +841,64 @@ class AgnesRepository(
         )
         filmDao.update(finishedFilm)
         onSceneUpdate?.invoke(sceneItems, 100, "Film complété avec succès !")
+    }
+
+    /**
+     * Construit le prompt vidéo définitif pour agnes-video-v2.0 :
+     * - Purge systématiquement tout vestige de directive audio déjà injectée dans le prompt pour empêcher tout dédoublement.
+     * - Extrait les paroles réelles (sans le préfixe du personnage) et impose une délivrance UNIQUE sans répétition.
+     * - Adopte une cinématographie humaine réaliste (cadre stable, gestuelle naturelle, grain 35mm).
+     */
+    fun buildCleanVideoPrompt(
+        scene: SceneItem,
+        filmStyle: String,
+        dialogueLanguage: String
+    ): String {
+        var baseAction = scene.video_prompt.ifBlank { scene.description }.trim()
+
+        val legacyPatterns = listOf(
+            Regex(",?\\s*Authentic Spoken [^,]+", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*authentic spoken [^,]+", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*spoken French dialogue[^,]+", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*synchronized [^,]+", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*immersive cinema sound design[^,]+", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*high fidelity sound design[^,]+", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*48kHz studio audio master[^,]+", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*no English words", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*do not repeat [^,]+", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*continuous fluid cinematic motion", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*photorealistic studio lighting", RegexOption.IGNORE_CASE),
+            Regex(",?\\s*style\\s+[a-zA-Z0-9_-]+", RegexOption.IGNORE_CASE)
+        )
+        for (pattern in legacyPatterns) {
+            baseAction = baseAction.replace(pattern, "")
+        }
+        baseAction = baseAction.trim().trimEnd(',', '.')
+
+        val soundTrack = if (scene.soundDesign.isNotBlank()) {
+            scene.soundDesign.replace("«", "").replace("»", "").trim()
+        } else "ambiance sonore environnementale réelle"
+
+        val audioDirective = when {
+            scene.audioMode == "ambient" -> {
+                ", silent human scene with authentic room tone and environment acoustics: $soundTrack, no spoken lines"
+            }
+            dialogueLanguage == "fr" -> {
+                val cleanSpeech = SceneItem.extractSpokenSpeech(scene.dialogue)
+                ", authentic spoken French dialogue, single delivery without repetition: \"$cleanSpeech\", natural conversational French cadence, authentic human voice, synchronous lip sync, actor delivers line once and stops speaking, natural room acoustics: $soundTrack, no English words"
+            }
+            else -> {
+                val cleanSpeech = SceneItem.extractSpokenSpeech(scene.dialogue)
+                ", authentic spoken English dialogue, single delivery without repetition: \"$cleanSpeech\", natural conversational cadence, synchronous lip movement, actor delivers line once, natural acoustics: $soundTrack"
+            }
+        }
+
+        val charPrefix = if (scene.characterAnchor.isNotBlank() && !baseAction.contains(scene.characterAnchor)) {
+            "[Character: ${scene.characterAnchor}], "
+        } else ""
+
+        val humanRealism = "natural human acting and body language, organic camera work, 35mm film grain, style $filmStyle, do not repeat dialogue"
+
+        return "$charPrefix$baseAction$audioDirective, $humanRealism"
     }
 }

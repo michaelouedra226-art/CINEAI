@@ -204,5 +204,17 @@ data class SceneItem(
             list.forEach { array.put(it.toJsonObject()) }
             return array.toString()
         }
+
+        fun extractSpokenSpeech(rawDialogue: String): String {
+            var cleaned = rawDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
+            val colonIndex = cleaned.indexOf(':')
+            if (colonIndex in 1..30) {
+                val speaker = cleaned.substring(0, colonIndex).trim()
+                if (!speaker.contains(" ") || speaker.equals("Voix off", ignoreCase = true) || speaker.equals("Voice over", ignoreCase = true)) {
+                    cleaned = cleaned.substring(colonIndex + 1).trim()
+                }
+            }
+            return cleaned.ifBlank { "Nous avançons vers l'objectif." }
+        }
     }
 }

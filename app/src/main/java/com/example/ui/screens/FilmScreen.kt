@@ -765,8 +765,9 @@ fun FilmScreen(
 
                                 if (scene.dialogue.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(3.dp))
+                                    val cleanDisplayDiag = scene.dialogue.trim().removePrefix("«").removeSuffix("»").trim()
                                     Text(
-                                        text = "« ${scene.dialogue} »",
+                                        text = "« $cleanDisplayDiag »",
                                         color = Color(0xFF93C5FD),
                                         fontSize = 11.sp,
                                         fontStyle = FontStyle.Italic,
@@ -954,8 +955,9 @@ fun FilmScreen(
 
                                     if (scene.dialogue.isNotBlank()) {
                                         Spacer(modifier = Modifier.height(3.dp))
+                                        val cleanDisplayDiag = scene.dialogue.trim().removePrefix("«").removeSuffix("»").trim()
                                         Text(
-                                            text = "« ${scene.dialogue} »",
+                                            text = "« $cleanDisplayDiag »",
                                             color = Color(0xFF93C5FD),
                                             fontSize = 9.sp,
                                             fontStyle = FontStyle.Italic,
