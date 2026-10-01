@@ -138,7 +138,8 @@ data class SceneItem(
     val audioMode: String = "dialogue",
     val characterAnchor: String = "",
     val narrativePhase: String = "Développement",
-    val charactersPresent: String = ""
+    val charactersPresent: String = "",
+    val soundDesign: String = ""
 ) {
     fun toJsonObject(): JSONObject {
         return JSONObject().apply {
@@ -159,6 +160,7 @@ data class SceneItem(
             put("characterAnchor", characterAnchor)
             put("narrativePhase", narrativePhase)
             put("charactersPresent", charactersPresent)
+            put("soundDesign", soundDesign)
         }
     }
 
@@ -181,7 +183,8 @@ data class SceneItem(
                 audioMode = obj.optString("audioMode", "dialogue"),
                 characterAnchor = obj.optString("characterAnchor", ""),
                 narrativePhase = obj.optString("narrativePhase", "Développement"),
-                charactersPresent = obj.optString("charactersPresent", "")
+                charactersPresent = obj.optString("charactersPresent", ""),
+                soundDesign = obj.optString("soundDesign", "")
             )
         }
 

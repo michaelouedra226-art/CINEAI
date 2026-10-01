@@ -476,7 +476,8 @@ class AgnesRepository(
                     audioMode = d.audioMode,
                     characterAnchor = d.characterAnchor,
                     narrativePhase = d.narrativePhase,
-                    charactersPresent = d.charactersPresent
+                    charactersPresent = d.charactersPresent,
+                    soundDesign = d.soundDesign
                 )
             }.toMutableList()
         }
@@ -512,9 +513,9 @@ class AgnesRepository(
             onSceneUpdate?.invoke(sceneItems, pct, "Phase 2 : Génération Keyframe ${i + 1}/$numScenes (continuité personnage)...")
 
             val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.image_prompt.contains(sc.characterAnchor)) {
-                "[Protagonist Anchor: ${sc.characterAnchor}], "
+                "[MASTER CONTINUITY: ${sc.characterAnchor}, identical face structure and signature outfit], "
             } else ""
-            val keyframePrompt = "$charPrefix${sc.image_prompt}, END frame scene ${i + 1}, style $filmStyle, 9:16 vertical cinema, 8k, consistent lighting"
+            val keyframePrompt = "$charPrefix${sc.image_prompt}, master studio keyframe, style $filmStyle, 35mm anamorphic lens, volumetric lighting, 9:16 vertical cinema, 8k"
             val imgRes = apiClient.generateImage(
                 apiKey = settings.apiKey,
                 prompt = keyframePrompt,
@@ -528,7 +529,7 @@ class AgnesRepository(
 
             if (imgRes is ApiResponse.Success) {
                 val keyframeUrl = imgRes.data.urls.firstOrNull()
-                sceneItems[i] = sc.copy(keyframe = keyframeUrl, progressText = "Keyframe généré")
+                sceneItems[i] = sc.copy(keyframe = keyframeUrl, progressText = "Keyframe studio généré")
                 filmDao.update(film.copy(scenesJson = SceneItem.serializeList(sceneItems)))
             } else {
                 val errorMsg = if (imgRes is ApiResponse.Error) imgRes.message else "Erreur keyframe"
@@ -559,15 +560,16 @@ class AgnesRepository(
             onSceneUpdate?.invoke(sceneItems, pctBase, "Phase 3 : Synthèse vidéo scène ${sc.number}/$numScenes (dialogue ${dialogueLanguage.uppercase()})...")
 
             val cleanDiag = sc.dialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
+            val soundTrack = if (sc.soundDesign.isNotBlank()) sc.soundDesign else "ambiance sonore immersive et nappe orchestrale"
             val dialogueDirective = when {
-                sc.audioMode == "ambient" -> ", atmospheric cinema sound design, no spoken dialogue"
+                sc.audioMode == "ambient" -> ", immersive cinema sound design: $soundTrack, layered spatial acoustic foley, dynamic orchestral score, silent characters"
                 dialogueLanguage == "fr" -> {
                     val speechText = if (cleanDiag.isNotBlank()) cleanDiag else "Nous avançons vers l'objectif sans faiblir."
-                    ", Authentic Spoken French dialogue: \"$speechText\", synchronized French lip sync, audible clear French voice acting, no English words, no silence"
+                    ", Authentic Spoken French dialogue with studio vocal resonance: \"$speechText\", perfectly synchronized French lip sync, natural expressive French voice acting, high fidelity sound design: $soundTrack, 48kHz studio audio master, no English words"
                 }
                 else -> {
                     val speechText = if (cleanDiag.isNotBlank()) cleanDiag else "We must keep moving forward."
-                    ", Authentic Spoken English dialogue: \"$speechText\", synchronized lip movement, clear speech"
+                    ", Authentic Spoken English dialogue with studio resonance: \"$speechText\", synchronized lip movement, clear expressive voice, high fidelity sound design: $soundTrack"
                 }
             }
 
@@ -710,7 +712,8 @@ class AgnesRepository(
                 audioMode = d.audioMode,
                 characterAnchor = d.characterAnchor,
                 narrativePhase = d.narrativePhase,
-                charactersPresent = d.charactersPresent
+                charactersPresent = d.charactersPresent,
+                soundDesign = d.soundDesign
             )
         }
         Pair(scriptRes.data.title, scenes)
@@ -744,9 +747,9 @@ class AgnesRepository(
                 onSceneUpdate?.invoke(sceneItems, pct, "Keyframe ${i + 1}/$numScenes (continuité personnage)...")
 
                 val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.image_prompt.contains(sc.characterAnchor)) {
-                    "[Protagonist Anchor: ${sc.characterAnchor}], "
+                    "[MASTER CONTINUITY: ${sc.characterAnchor}, identical face structure and signature outfit], "
                 } else ""
-                val keyframePrompt = "$charPrefix${sc.image_prompt}, END frame scene ${i + 1}, style ${film.filmStyle}, 9:16 vertical cinema, 8k, consistent lighting"
+                val keyframePrompt = "$charPrefix${sc.image_prompt}, master studio keyframe, style ${film.filmStyle}, 35mm anamorphic lens, volumetric lighting, 9:16 vertical cinema, 8k"
                 val imgRes = apiClient.generateImage(
                     apiKey = settings.apiKey,
                     prompt = keyframePrompt,
@@ -782,11 +785,12 @@ class AgnesRepository(
                 onSceneUpdate?.invoke(sceneItems, pctBase, "Scène ${sc.number}/$numScenes (reprise synchro)...")
 
                 val cleanDiag = sc.dialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
+                val soundTrack = if (sc.soundDesign.isNotBlank()) sc.soundDesign else "ambiance sonore immersive et nappe orchestrale"
                 val dialogueDirective = when {
-                    sc.audioMode == "ambient" -> ", atmospheric cinema sound design, no spoken dialogue"
+                    sc.audioMode == "ambient" -> ", immersive cinema sound design: $soundTrack, layered spatial acoustic foley, dynamic orchestral score, silent characters"
                     else -> {
                         val speechText = if (cleanDiag.isNotBlank()) cleanDiag else "Nous avançons vers l'objectif sans faiblir."
-                        ", Authentic Spoken French dialogue: \"$speechText\", synchronized French lip sync, audible clear French voice acting, no English words, no silence"
+                        ", Authentic Spoken French dialogue with studio vocal resonance: \"$speechText\", perfectly synchronized French lip sync, natural expressive French voice acting, high fidelity sound design: $soundTrack, 48kHz studio audio master, no English words"
                     }
                 }
 

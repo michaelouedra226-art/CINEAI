@@ -774,6 +774,19 @@ fun FilmScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
+
+                                if (scene.soundDesign.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "🎧 ${scene.soundDesign}",
+                                            color = Color(0xFFC4B5FD),
+                                            fontSize = 10.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -938,6 +951,18 @@ fun FilmScreen(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+
+                                    if (scene.dialogue.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Text(
+                                            text = "« ${scene.dialogue} »",
+                                            color = Color(0xFF93C5FD),
+                                            fontSize = 9.sp,
+                                            fontStyle = FontStyle.Italic,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
 
                                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -1115,6 +1140,28 @@ fun FilmScreen(
                                 draftScenes = updated
                             },
                             placeholder = { Text("Ex: « Ne regarde pas en arrière, nous devons sortir d'ici ! »", color = Color(0xFF555566), fontSize = 11.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF191924),
+                                unfocusedContainerColor = Color(0xFF191924),
+                                focusedBorderColor = Color(0xFF7C3AED),
+                                unfocusedBorderColor = Color(0xFF2C2C3C),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = "🎧 Sound Design Studio (Acoustique & Foley) :", color = Color(0xFFC4B5FD), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(
+                            value = sc.soundDesign,
+                            onValueChange = { newSound ->
+                                val updated = draftScenes.toMutableList()
+                                updated[index] = sc.copy(soundDesign = newSound)
+                                draftScenes = updated
+                            },
+                            placeholder = { Text("Ex: Grondement de basse sourd, souffle du vent nocturne, nappes de violoncelles dramatiques", color = Color(0xFF555566), fontSize = 11.sp) },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = Color(0xFF191924),
@@ -1826,7 +1873,8 @@ fun FilmScreen(
                                         camera_movement = "Travelling avant",
                                         status = "pending",
                                         dialogue = if (selectedAudioPresence == "ambient") "" else "« Nous devons continuer sans hésiter. »",
-                                        audioMode = selectedAudioPresence
+                                        audioMode = selectedAudioPresence,
+                                        soundDesign = "Nappe orchestrale cinématique et sound design immersif"
                                     )
                                 }
                                 isPreparingDrafts = false

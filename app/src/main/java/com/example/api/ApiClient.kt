@@ -56,7 +56,8 @@ data class GeneratedSceneDraft(
     val audioMode: String = "dialogue",
     val characterAnchor: String = "",
     val narrativePhase: String = "Développement",
-    val charactersPresent: String = ""
+    val charactersPresent: String = "",
+    val soundDesign: String = ""
 )
 
 class ApiClient(
@@ -490,33 +491,33 @@ class ApiClient(
 
             val systemPrompt = if (batchIndex == 0) {
                 """
-                Tu es un showrunner et grand réalisateur de cinéma de studio.
-                Tu dois concevoir un film captivant, rythmé et accessible à tous, digne des plus grands studios de cinéma mondiaux.
-                L'histoire doit être passionnante mais FACILE À COMPRENDRE, avec un fil conducteur évident et des enjeux clairs dès les premières secondes.
+                Tu es un showrunner d'élite et grand réalisateur de cinéma de studio international (style HBO / A24 / Warner Bros).
+                Tu dois concevoir un film captivant, palpitant et accessible à tous, avec une réalisation époustouflante digne des plus grands chefs-d'œuvre.
+                L'histoire doit être passionnante mais LIMPIDE ET FACILE À COMPRENDRE, avec un fil conducteur évident et des enjeux viscéraux posés immédiatement.
 
-                STRUCTURE NARRATIVE OBLIGATOIRE EN 4 ACTES (pour les $numScenes plans) :
-                - ACTE 1 : INTRODUCTION (plans 1 à ~25%) :
-                  * Plan 1 OBLIGATOIRE : Grand plan d'ensemble large du monde, ville, décor ou paysage immersif (SANS focalisation sur un personnage), pour poser l'ambiance et l'univers.
-                  * Plans suivants de l'Acte 1 : Présentation du protagoniste dans son quotidien, puis arrivée rapide de l'élément déclencheur qui démarre la quête.
-                - ACTE 2 : DÉVELOPPEMENT & PÉRIPÉTIES (plans ~26% à ~70%) :
-                  * Progression dynamique et limpide de l'intrigue.
-                  * VARIÉTÉ DU CASTING OBLIGATOIRE : Ne PAS centrer tous les plans sur le héros seul ! Alternez les points de vue : scènes centrées sur l'allié/secondaire, scènes centrées sur l'antagoniste/menace (réactions, complots), scènes de duo et contre-champs.
-                - ACTE 3 : CLIMAX (plans ~71% à ~85%) :
-                  * Confrontation majeure, moment décisif où les destins se croisent, intensité dramatique ou action spectaculaire au sommet.
-                - ACTE 4 : CONCLUSION & RÉSOLUTION (plans ~86% à 100%) :
-                  * Dénouement émotionnel limpide et satisfaisant, conséquence morale ou victoire éclatante, plan final mémorable de clôture.
+                STRUCTURE NARRATIVE HOLLYWOODIENNE EN 4 ACTES (pour les $numScenes plans) :
+                - ACTE 1 : EXPOSITION & DÉCLENCHEUR (plans 1 à ~25%) :
+                  * Plan 1 OBLIGATOIRE : Grand plan d'ensemble large du monde, ville, décor ou paysage immersif (SANS focalisation sur un personnage), pour poser l'ambiance et la physicalité de l'univers.
+                  * Plans suivants de l'Acte 1 : Présentation vivante du héros dans son élément, puis surgissement de l'élément déclencheur qui bouleverse son quotidien.
+                - ACTE 2 : DÉVELOPPEMENT & PRESSION MONTANTE (plans ~26% à ~70%) :
+                  * Progression dramatique continue, tension palpable.
+                  * VARIÉTÉ DU CASTING OBLIGATOIRE : Ne PAS centrer tous les plans sur le héros seul ! Alternez les points de vue : scènes centrées sur l'allié/secondaire, scènes où l'antagoniste avance ses pions ou prépare son piège, scènes de duo et dialogues en champ / contre-champ.
+                - ACTE 3 : CLIMAX & POINT DE NON-RETOUR (plans ~71% à ~85%) :
+                  * Confrontation majeure, moment de vérité culminant où les destins basculent, intensité émotionnelle ou action spectaculaire au sommet.
+                - ACTE 4 : RÉSOLUTION & ÉPILOGUE (plans ~86% à 100%) :
+                  * Dénouement émotionnel limpide, conséquence morale ou victoire décisive, plan final mémorable qui marque les esprits.
 
-                CASTING STUDIO & COHÉRENCE FOLLE DES PERSONNAGES :
-                - Ne focalise JAMAIS tout le film uniquement sur le héros principal ! Une vraie production de studio intègre plusieurs figures marquantes.
-                - 'protagonist_bible' : Nom + description physique immuable et ultra-précise du héros (genre, visage, coiffure immuable, tenue vestimentaire invariable avec couleurs précises, accessoire signature).
-                - 'supporting_cast_bible' : Nom + rôle (allié, mentor ou complice) + description physique invariable au look contrasté (tenue et couleurs distinctives).
-                - 'antagonist_bible' : Nom + rôle (antagoniste, rival ou menace) + allure frappante, tenue sombre ou distinctive invariable.
-                - 'visual_consistency' : Palette chromatique $style, texture 35mm, ratio 9:16 vertical cinema, éclairage soigné, 8k.
+                CASTING STUDIO & BIBLE VISUELLE DE PERSONNAGES (COHÉRENCE ABSOLUE) :
+                - 'protagonist_bible' : Nom + description physique pérenne et ultra-précise (genre, structure du visage, regard, couleur des yeux, coupe et couleur de cheveux immuables, tenue vestimentaire signature invariable avec couleurs et matières précises, accessoire fétiche).
+                - 'supporting_cast_bible' : Nom + rôle (allié loyal, mentor avisé ou complice) + description physique invariable au look contrasté (silhouette, tenue signature et palette distincte).
+                - 'antagonist_bible' : Nom + rôle (antagoniste charismatique, rival menaçant) + allure marquante, regard perçant, tenue sombre ou distinctive invariable.
+                - 'visual_consistency' : Palette chromatique $style, optique 35mm anamorphique, grain argentique fin, éclairage volumétrique studio, 8k.
 
-                RÈGLES DE DIALOGUE :
+                EXCELLENCE DES PAROLES ET DU SON (SOUND DESIGN STUDIO) :
                 $langRule
                 $audioRule
-                Dans 'dialogue', indique qui parle (ex: « Elena : Attention derrière toi ! » ou « Marcus : Vous arrivez trop tard. » ou « Voix off : Tout a basculé en cet instant... »).
+                - 'dialogue' : Des répliques ciselées, crédibles et percutantes, chargées d'émotion et de sous-texte dramatique. Indique le nom de qui parle (ex: « Elena : Il n'y aura pas de seconde chance, franchis cette arche ! » ou « Marcus : Vous sous-estimez ce que cette cité exige en retour. »).
+                - 'sound_design' : Ambiance acoustique studio détaillée de chaque plan (bruitages immersifs, résonance de l'espace, foley réaliste et thème musical orchestral évocateur).
 
                 Réponds EXCLUSIVEMENT en JSON compact sans balises markdown :
                 {
@@ -534,8 +535,9 @@ class ApiClient(
                       "characters_present": "Décor seul / Monde immersif",
                       "title": "Titre court du plan",
                       "action": "Description visuelle cinématographique précise du plan",
-                      "dialogue": "Voix off : « Réplique d'ouverture en français »",
-                      "camera": "Travelling aérien lent"
+                      "dialogue": "Voix off : « Réplique d'ouverture en français avec émotion »",
+                      "sound_design": "Grondement sourd de basse, souffle du vent nocturne, nappes de violoncelles dramatiques",
+                      "camera": "Travelling aérien lent majestueux"
                     }
                   ]
                 }
@@ -543,7 +545,7 @@ class ApiClient(
                 """.trimIndent()
             } else {
                 """
-                Tu es un réalisateur de studio de renommée mondiale. Poursuis le film "$filmTitle".
+                Tu es un réalisateur de studio de renommée internationale. Poursuis le film "$filmTitle".
                 CASTING IMMUABLE :
                 - Protagoniste : "$protagonistBible"
                 - Allié / Secondaire : "$supportingCastBible"
@@ -567,7 +569,8 @@ class ApiClient(
                       "characters_present": "Allié / Secondaire",
                       "title": "Titre court",
                       "action": "Description concise de l'action",
-                      "dialogue": "« Réplique en français »",
+                      "dialogue": "« Réplique en français percutante »",
+                      "sound_design": "Écho métallique, bruissement de tissu, tension orchestrale montante",
                       "camera": "Plan fixe immersif"
                     }
                   ]
@@ -647,6 +650,8 @@ class ApiClient(
                             val actionDesc = sObj.optString("action", sObj.optString("description", "Plan $targetNum"))
                             val title = sObj.optString("title", "Plan $targetNum")
                             val camMovement = sObj.optString("camera", sObj.optString("camera_movement", "Travelling avant"))
+                            val rawSoundDesign = sObj.optString("sound_design", sObj.optString("audio_ambiance", "Ambiance sonore cinématographique immersive"))
+                            val soundDesign = rawSoundDesign.ifBlank { "Ambiance sonore studio et nappe orchestrale" }
                             val enforcedDialogue = enforceCleanDialogue(rawDiag, actionDesc, dialogueLanguage, audioPresence, targetNum)
 
                             val charsPresent = sObj.optString("characters_present", sObj.optString("characters", ""))
@@ -691,19 +696,19 @@ class ApiClient(
                             )
 
                             val sceneCharacterAnchor = when {
-                                isNoCharacter -> "Cinematic scenery, environmental and architectural details without characters"
-                                isConfrontation && antagonistBible.isNotBlank() -> "[Protagonist: $protagonistBible] confronting [Antagonist: $antagonistBible]"
-                                isDuo && supportingCastBible.isNotBlank() -> "[Protagonist: $protagonistBible] together with [Ally: $supportingCastBible]"
-                                isAntagonistOnly && antagonistBible.isNotBlank() -> "[Antagonist: $antagonistBible]"
-                                isSecondaryOnly && supportingCastBible.isNotBlank() -> "[Ally/Supporting: $supportingCastBible]"
-                                else -> "[Protagonist: $protagonistBible]"
+                                isNoCharacter -> "Cinematic scenery, architectural depth, environmental establishing shot without people"
+                                isConfrontation && antagonistBible.isNotBlank() -> "[Protagonist: $protagonistBible] in intense dramatic face-off against [Antagonist: $antagonistBible]"
+                                isDuo && supportingCastBible.isNotBlank() -> "[Protagonist: $protagonistBible] side-by-side with [Ally: $supportingCastBible]"
+                                isAntagonistOnly && antagonistBible.isNotBlank() -> "[Antagonist Focus: $antagonistBible]"
+                                isSecondaryOnly && supportingCastBible.isNotBlank() -> "[Supporting Ally Focus: $supportingCastBible]"
+                                else -> "[Protagonist Focus: $protagonistBible]"
                             }
 
                             val cleanDiagSpeech = enforcedDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
                             val audioDirective = when {
-                                audioPresence == "ambient" -> ", atmospheric cinema sound design, silent characters"
-                                dialogueLanguage == "fr" -> ", Authentic Spoken French dialogue: \"$cleanDiagSpeech\", synchronized French lip sync, clear French voice, no English words"
-                                else -> ", Authentic Spoken English dialogue: \"$cleanDiagSpeech\", synchronized lip movement, clear speech"
+                                audioPresence == "ambient" -> ", immersive cinema sound design: $soundDesign, layered spatial acoustic foley, emotional orchestral score, silent characters"
+                                dialogueLanguage == "fr" -> ", Authentic Spoken French dialogue with studio resonance: \"$cleanDiagSpeech\", perfectly synchronized French lip sync, natural expressive French voice acting, high fidelity sound design: $soundDesign, 48kHz studio audio master, no English words"
+                                else -> ", Authentic Spoken English dialogue with studio resonance: \"$cleanDiagSpeech\", synchronized lip movement, clear expressive voice, high fidelity sound design: $soundDesign"
                             }
 
                             val charactersPresentLabel = when {
@@ -715,12 +720,14 @@ class ApiClient(
                                 else -> "Protagoniste"
                             }
 
+                            val studioCinematicStyle = "35mm anamorphic lens, volumetric studio lighting, rich atmospheric haze, hyperrealistic skin pores, photorealistic texture, masterpiece color grade, $visualConsistency, 9:16 vertical cinema, 8k"
+
                             val unifiedImagePrompt = if (isNoCharacter) {
-                                "$prompt, [Atmospheric Scenery - No People], scène $targetNum [$act - $shotType]: $title - $actionDesc, $visualConsistency, 9:16 vertical cinema, 8k"
+                                "$prompt, [ESTABLISHING SHOT - SCENERY ONLY], scène $targetNum [$act - $shotType]: $title - $actionDesc, $studioCinematicStyle"
                             } else {
-                                "$prompt, [Character Bible: $sceneCharacterAnchor], scène $targetNum [$act - $shotType]: $title - $actionDesc, $visualConsistency, 9:16 vertical cinema, 8k"
+                                "$prompt, [MASTER CHARACTER CONTINUITY: $sceneCharacterAnchor, exact identical face structure, signature costume], scène $targetNum [$act - $shotType]: $title - $actionDesc, $studioCinematicStyle"
                             }
-                            val unifiedVideoPrompt = "$camMovement, $actionDesc$audioDirective, cinematic motion, style $style"
+                            val unifiedVideoPrompt = "$camMovement, $actionDesc$audioDirective, continuous fluid cinematic motion, photorealistic studio lighting, style $style"
 
                             allDrafts.add(
                                 GeneratedSceneDraft(
@@ -734,7 +741,8 @@ class ApiClient(
                                     audioMode = audioPresence,
                                     characterAnchor = sceneCharacterAnchor,
                                     narrativePhase = act,
-                                    charactersPresent = charactersPresentLabel
+                                    charactersPresent = charactersPresentLabel,
+                                    soundDesign = soundDesign
                                 )
                             )
                         }
@@ -749,12 +757,13 @@ class ApiClient(
                                 else -> "CONCLUSION"
                             }
                             val fallbackDesc = "Progression dramatique ($defaultAct) - Plan $nextNum"
+                            val fallbackSound = "Nappe de cordes cinématiques, écho spatial et foley subtil"
                             val fallbackDialogue = enforceCleanDialogue("", fallbackDesc, dialogueLanguage, audioPresence, nextNum)
                             val cleanSpeech = fallbackDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
                             val audioDirective = if (dialogueLanguage == "fr") {
-                                ", Authentic Spoken French dialogue: \"$cleanSpeech\", synchronized French lip sync, no English words"
+                                ", Authentic Spoken French dialogue with studio resonance: \"$cleanSpeech\", synchronized French lip sync, sound design: $fallbackSound, no English words"
                             } else {
-                                ", Authentic Spoken English dialogue: \"$cleanSpeech\", synchronized lip movement"
+                                ", Authentic Spoken English dialogue: \"$cleanSpeech\", synchronized lip movement, sound design: $fallbackSound"
                             }
 
                             val isSecFallback = nextNum % 3 == 0 && supportingCastBible.isNotBlank()
@@ -775,14 +784,15 @@ class ApiClient(
                                     number = nextNum,
                                     title = "Plan $nextNum : Séquence $charLabel",
                                     description = fallbackDesc,
-                                    imagePrompt = "$prompt, [Character Bible: $fallbackAnchor], scène $nextNum [$defaultAct]: $fallbackDesc, $visualConsistency, 9:16 vertical cinema, 8k",
+                                    imagePrompt = "$prompt, [MASTER CONTINUITY: $fallbackAnchor], scène $nextNum [$defaultAct]: $fallbackDesc, $visualConsistency, 9:16 vertical cinema, 8k",
                                     videoPrompt = "Travelling avant, $fallbackDesc$audioDirective, continuous motion",
                                     cameraMovement = "Travelling avant",
                                     dialogue = fallbackDialogue,
                                     audioMode = audioPresence,
                                     characterAnchor = fallbackAnchor,
                                     narrativePhase = defaultAct,
-                                    charactersPresent = charLabel
+                                    charactersPresent = charLabel,
+                                    soundDesign = fallbackSound
                                 )
                             )
                         }
