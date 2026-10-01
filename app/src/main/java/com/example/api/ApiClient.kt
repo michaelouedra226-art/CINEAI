@@ -237,8 +237,18 @@ class ApiClient(
             if (hasImages) {
                 put("mode", "keyframes")
                 val imagesArray = JSONArray()
-                if (!startImageUrl.isNullOrBlank()) imagesArray.put(startImageUrl)
-                if (!endImageUrl.isNullOrBlank()) imagesArray.put(endImageUrl)
+                val start = startImageUrl?.trim().orEmpty()
+                val end = endImageUrl?.trim().orEmpty()
+                if (start.isNotBlank() && end.isNotBlank()) {
+                    imagesArray.put(start)
+                    imagesArray.put(end)
+                } else if (start.isNotBlank()) {
+                    imagesArray.put(start)
+                    imagesArray.put(start)
+                } else if (end.isNotBlank()) {
+                    imagesArray.put(end)
+                    imagesArray.put(end)
+                }
                 put("image", imagesArray)
             } else {
                 put("mode", "text")

@@ -577,7 +577,7 @@ class AgnesRepository(
 
             val isCustomStartImage = (i == 0 && startImage.isNotBlank())
             val startUrl = if (isCustomStartImage) startImage else (currentKeyframe.ifBlank { previousFrameUrl })
-            val endUrl: String? = null // Animation directe depuis la keyframe du plan pour préserver l'identité du personnage
+            val endUrl = currentKeyframe.ifBlank { startUrl }
 
             val videoInit = apiClient.initiateVideo(
                 apiKey = settings.apiKey,
@@ -796,7 +796,7 @@ class AgnesRepository(
 
                 val isCustomStartImage = (i == 0 && film.startImage.isNotBlank())
                 val startUrl = if (isCustomStartImage) film.startImage else (currentKeyframe.ifBlank { previousFrameUrl })
-                val endUrl: String? = null // Animation directe sans morphing croisé
+                val endUrl = currentKeyframe.ifBlank { startUrl }
 
                 val videoInit = apiClient.initiateVideo(
                     apiKey = settings.apiKey,

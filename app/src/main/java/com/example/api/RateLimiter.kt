@@ -53,20 +53,20 @@ class RateLimiter {
     companion object {
         const val MAX_VIDEO_SECONDS_PER_DAY = 500.0
 
-        const val FIRST_POLL_DELAY_MS = 120_000L
-        const val POLL_INTERVAL_MS = 30_000L
-        const val MAX_POLL_ATTEMPTS = 20
+        const val FIRST_POLL_DELAY_MS = 4_000L
+        const val POLL_INTERVAL_MS = 4_000L
+        const val MAX_POLL_ATTEMPTS = 60
 
-        const val STALL_THRESHOLD = 6 // 6 polls identiques => stall
-        const val STALL_RETRY_DELAY_MS = 90_000L
+        const val STALL_THRESHOLD = 15 // 15 polls identiques (60s)
+        const val STALL_RETRY_DELAY_MS = 8_000L
         const val MAX_STALL_RETRIES = 3
 
-        const val RETRY_429_WAIT_MS = 90_000L
-        const val RETRY_503_WAIT_MS = 20_000L
-        const val IMAGE_CALL_DELAY_MS = 4_000L
+        const val RETRY_429_WAIT_MS = 25_000L
+        const val RETRY_503_WAIT_MS = 10_000L
+        const val IMAGE_CALL_DELAY_MS = 1_500L
 
-        const val VIDEO_PAUSE_MS_FREE = 61_000L
-        const val VIDEO_PAUSE_MS_TOKEN = 12_000L
+        const val VIDEO_PAUSE_MS_FREE = 5_000L
+        const val VIDEO_PAUSE_MS_TOKEN = 2_000L
         const val VIDEO_PAUSE_MS_ENTERPRISE = 0L
     }
 
