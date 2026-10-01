@@ -54,9 +54,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -158,6 +160,9 @@ fun FilmScreen(
     var draftScenes by remember { mutableStateOf<List<SceneItem>>(emptyList()) }
     var isPreparingDrafts by remember { mutableStateOf(false) }
 
+    // Mode d'affichage des scènes en production (Grand Format Cinéma par défaut pour visibilité maximale)
+    var isCinemaViewMode by remember { mutableStateOf(true) }
+
     // Breakdown automatique
     val breakdown = remember(requestedDurationSeconds, isAutoScenesMode, manualScenesCount) {
         AgnesRepository.calculateBreakdown(
@@ -207,7 +212,7 @@ fun FilmScreen(
             type = if (isVideo) "video" else "image",
             prompt = sc.video_prompt.ifBlank { sc.image_prompt },
             model = if (isVideo) "agnes-video-v2.0" else "agnes-image-2.1-flash",
-            resultUrl = sc.videoUrl,
+            resultUrl = if (isVideo) sc.videoUrl else sc.keyframe,
             thumbnail = sc.keyframe,
             status = sc.status
         )
@@ -245,9 +250,188 @@ fun FilmScreen(
             modifier = modifier
                 .fillMaxSize()
                 .background(Color(0xFF0A0A0F))
-                .padding(16.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            // Header direct
+            // ── 1. BANDEAU DE COMMANDE ULTRA-COMPACT (<65dp) ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Statut Direct + Titre
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    AgnesSvgIcon(icon = AgnesIcon.LIVE_DOT, tint = Color(0xFFEF4444), size = 10.dp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "DIRECT",
+                        color = Color(0xFFEF4444),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "•",
+                        color = Color(0xFF52525B),
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (filmTitle.isNotBlank()) filmTitle else "Film Studio",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Chrono & Arrêt direct
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF181822))
+                            .padding(horizontal = 7.dp, vertical = 4.dp)
+                    ) {
+                        AgnesSvgIcon(icon = AgnesIcon.SPINNER, tint = Color(0xFFA78BFA), size = 12.dp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = timeString,
+                            color = Color(0xFFA78BFA),
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0x22EF4444))
+                            .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(6.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                showCancelDialog = true
+                            }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Arrêter",
+                            color = Color(0xFFEF4444),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Jauge de progression fine (3.dp)
+            AgnesShimmerProgressBar(
+                progress = generationProgress / 100f,
+                height = 3.dp
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Progression % + Action en cours + Stepper 3 étapes 1-ligne
+            val scriptDone = generationProgress >= 20
+            val keyframesDone = generationProgress >= 45
+            val scenesDone = generationProgress >= 100
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    Text(
+                        text = "$generationProgress%",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = currentStepText,
+                        color = Color(0xFFA1A1AA),
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Micro Stepper horizontal
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (scriptDone) Color(0xFF064E3B) else Color(0xFF1C1C26))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (scriptDone) "1.Script ✓" else "1.Script",
+                            color = if (scriptDone) Color(0xFF34D399) else Color(0xFFA1A1AA),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                if (keyframesDone) Color(0xFF064E3B)
+                                else if (generationProgress in 20..44) Color(0xFF4C1D95)
+                                else Color(0xFF1C1C26)
+                            )
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (keyframesDone) "2.Images ✓" else if (generationProgress in 20..44) "2.Images ⏳" else "2.Images",
+                            color = if (keyframesDone) Color(0xFF34D399) else if (generationProgress in 20..44) Color(0xFFC084FC) else Color(0xFF71717A),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                if (scenesDone) Color(0xFF064E3B)
+                                else if (generationProgress >= 45) Color(0xFF4C1D95)
+                                else Color(0xFF1C1C26)
+                            )
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (scenesDone) "3.Vidéo ✓" else if (generationProgress >= 45) "3.Vidéo ⏳" else "3.Vidéo",
+                            color = if (scenesDone) Color(0xFF34D399) else if (generationProgress >= 45) Color(0xFFC084FC) else Color(0xFF71717A),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // ── 2. BARRE DE CONTRÔLE DE LA LISTE DES SCÈNES ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -255,205 +439,142 @@ fun FilmScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Production Film",
+                        text = "Scènes en production",
                         color = Color.White,
-                        fontSize = 18.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFFEF4444))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF2A1B4D))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "EN DIRECT",
-                            color = Color.White,
+                            text = "$completedScenes/$totalScenes",
+                            color = Color(0xFFA78BFA),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AgnesSvgIcon(icon = AgnesIcon.SPINNER, tint = Color(0xFFA78BFA), size = 16.dp)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = timeString,
-                        color = Color(0xFFA78BFA),
-                        fontSize = 16.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
+                // Switcher de vue Grand Format vs Compact
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF181822))
+                        .padding(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (isCinemaViewMode) Color(0xFF7C3AED) else Color.Transparent)
+                            .clickable { isCinemaViewMode = true }
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "Grand Format",
+                            color = if (isCinemaViewMode) Color.White else Color(0xFFA1A1AA),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (!isCinemaViewMode) Color(0xFF7C3AED) else Color.Transparent)
+                            .clickable { isCinemaViewMode = false }
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "Compact",
+                            color = if (!isCinemaViewMode) Color.White else Color(0xFFA1A1AA),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // % et barre shimmer
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "$generationProgress %",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Scène $completedScenes / $totalScenes",
-                    color = Color(0xFFA78BFA),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = currentStepText,
-                color = Color(0xFFA1A1AA),
-                fontSize = 12.sp,
-                maxLines = 1
-            )
 
             Spacer(modifier = Modifier.height(8.dp))
-            AgnesShimmerProgressBar(
-                progress = generationProgress / 100f,
-                height = 10.dp
-            )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Timeline de production (Section 5 : Script -> Keyframes -> Vidéos -> Finalisation)
-            val scriptDone = generationProgress >= 20
-            val keyframesDone = generationProgress >= 45
-            val scenesDone = generationProgress >= 100
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF13131A))
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AgnesSvgIcon(
-                        icon = if (scriptDone) AgnesIcon.CHECK else AgnesIcon.SPINNER,
-                        tint = if (scriptDone) Color(0xFF10B981) else Color(0xFFA78BFA),
-                        size = 16.dp
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "1. Script & Découpage (agnes-2.5-flash)",
-                        color = if (scriptDone) Color.White else Color(0xFFD4D4D8),
-                        fontSize = 13.sp,
-                        fontWeight = if (scriptDone) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AgnesSvgIcon(
-                        icon = if (keyframesDone) AgnesIcon.CHECK else if (generationProgress in 20..44) AgnesIcon.LIVE_DOT else AgnesIcon.PLUS,
-                        tint = if (keyframesDone) Color(0xFF10B981) else if (generationProgress in 20..44) Color(0xFFA78BFA) else Color(0xFF71717A),
-                        size = 16.dp
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "2. Keyframes visuels (agnes-image-2.1-flash)",
-                        color = if (keyframesDone) Color.White else if (generationProgress in 20..44) Color.White else Color(0xFF71717A),
-                        fontSize = 13.sp,
-                        fontWeight = if (keyframesDone) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AgnesSvgIcon(
-                        icon = if (scenesDone) AgnesIcon.CHECK else if (generationProgress >= 45) AgnesIcon.LIVE_DOT else AgnesIcon.PLUS,
-                        tint = if (scenesDone) Color(0xFF10B981) else if (generationProgress >= 45) Color(0xFFA78BFA) else Color(0xFF71717A),
-                        size = 16.dp
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "3. Rendu vidéo séquentiel (agnes-video-v2.0)",
-                        color = if (scenesDone) Color.White else if (generationProgress >= 45) Color.White else Color(0xFF71717A),
-                        fontSize = 13.sp,
-                        fontWeight = if (scenesDone) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Scènes en production ($completedScenes/$totalScenes achevées)",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
+            // ── 3. LISTE DES SCÈNES AVEC VISIBILITÉ OPTIMISÉE ──
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(currentScenes) { scene ->
                     val isDone = scene.status == "done"
                     val isProc = scene.status == "processing"
                     val isStalled = scene.status == "stalled"
+                    val hasVideo = !scene.videoUrl.isNullOrBlank()
+                    val hasKeyframe = !scene.keyframe.isNullOrBlank()
 
-                    AgnesInteractiveCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        isStalled = isStalled,
-                        onClick = {
-                            if (!scene.keyframe.isNullOrBlank() || !scene.videoUrl.isNullOrBlank()) {
-                                triggerHapticFeedback(context)
-                                selectedSceneForPreview = scene
-                            }
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (!scene.keyframe.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = scene.keyframe,
-                                    contentDescription = scene.title,
-                                    modifier = Modifier
-                                        .size(62.dp)
-                                        .clip(RoundedCornerShape(8.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(62.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF1C1C25)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    AgnesSvgIcon(icon = AgnesIcon.FILM, tint = Color(0xFF71717A), size = 22.dp)
+                    if (isCinemaViewMode) {
+                        // ═════════════════════════════════════════════════
+                        // VUE GRAND FORMAT CINÉMA IMMERSIF (VISUELS NETS & GRANDS)
+                        // ═════════════════════════════════════════════════
+                        AgnesInteractiveCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            isStalled = isStalled,
+                            onClick = {
+                                if (hasKeyframe || hasVideo) {
+                                    triggerHapticFeedback(context)
+                                    selectedSceneForPreview = scene
                                 }
                             }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Scène ${scene.number} : ${scene.title}",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1
-                                )
-                                Spacer(modifier = Modifier.height(3.dp))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp)
+                            ) {
+                                // Ligne 1 : Titre du plan + Statut
                                 Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Plan ${scene.number} : ${scene.title.ifBlank { "Scène ${scene.number}" }}",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                if (isDone) Color(0xFF064E3B)
+                                                else if (isStalled) Color(0xFF451A03)
+                                                else if (isProc) Color(0xFF4C1D95)
+                                                else Color(0xFF27272A)
+                                            )
+                                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isDone) "Terminé" else if (isStalled) "Stall" else if (isProc) "En cours" else "En attente",
+                                            color = if (isDone) Color(0xFF34D399) else if (isStalled) Color(0xFFF59E0B) else if (isProc) Color(0xFFC084FC) else Color(0xFFA1A1AA),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Ligne 2 : Badges Acte + Casting
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     if (scene.narrativePhase.isNotBlank()) {
                                         val act = scene.narrativePhase.uppercase()
@@ -467,83 +588,384 @@ fun FilmScreen(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(4.dp))
                                                 .background(actBg)
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
                                         ) {
-                                            Text(text = act, color = actColor, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                            Text(text = act, color = actColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
-                                    if (scene.charactersPresent.isNotBlank()) {
+
+                                    val charLabel = scene.charactersPresent.ifBlank { "Protagoniste" }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color(0xFF20202C))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = charLabel,
+                                            color = Color(0xFFD4D4D8),
+                                            fontSize = 9.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.weight(1f))
+
+                                    if (hasVideo) {
+                                        Text("▶ Toucher pour visionner", color = Color(0xFF34D399), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    } else if (hasKeyframe) {
+                                        Text("🔍 Toucher pour agrandir", color = Color(0xFFA78BFA), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // ── CADRE VISUEL GRAND FORMAT (Hauteur 195dp, Net et Immersif) ──
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(195.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF13131A))
+                                        .border(
+                                            1.dp,
+                                            if (isDone) Color(0xFF10B981) else if (isProc) Color(0xFF7C3AED) else Color(0xFF282836),
+                                            RoundedCornerShape(10.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (hasKeyframe) {
+                                        AsyncImage(
+                                            model = scene.keyframe,
+                                            contentDescription = scene.title,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+
+                                        // Overlay Vidéo Prête avec grand bouton PLAY
+                                        if (hasVideo) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color(0x44000000)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(50.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color(0xEE7C3AED))
+                                                        .border(2.dp, Color.White, CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    AgnesSvgIcon(icon = AgnesIcon.PLAY, tint = Color.White, size = 24.dp)
+                                                }
+                                            }
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomStart)
+                                                    .padding(8.dp)
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(Color(0xCC000000))
+                                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                            ) {
+                                                Text(
+                                                    text = "✓ VIDÉO PRÊTE",
+                                                    color = Color(0xFF34D399),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        } else if (isProc) {
+                                            // Synthèse vidéo en cours : le keyframe reste visible en dessous !
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color(0x55000000)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(20.dp))
+                                                        .background(Color(0xDD181824))
+                                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    AgnesSvgIcon(icon = AgnesIcon.SPINNER, tint = Color(0xFFA78BFA), size = 14.dp)
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = scene.progressText.ifBlank { "Animation vidéo en cours..." },
+                                                        color = Color.White,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            // Keyframe généré
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomStart)
+                                                    .padding(8.dp)
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(Color(0xCC000000))
+                                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                            ) {
+                                                Text(
+                                                    text = "KEYFRAME PRÊT",
+                                                    color = Color(0xFFA78BFA),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+
+                                        // Badge Loupe d'agrandissement en haut à droite
                                         Box(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(Color(0xFF1E1E28))
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                .align(Alignment.TopEnd)
+                                                .padding(8.dp)
+                                                .size(30.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xAA000000)),
+                                            contentAlignment = Alignment.Center
                                         ) {
-                                            Text(text = scene.charactersPresent, color = Color(0xFFD4D4D8), fontSize = 8.sp)
+                                            AgnesSvgIcon(icon = AgnesIcon.SEARCH, tint = Color.White, size = 15.dp)
+                                        }
+                                    } else {
+                                        // En attente
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            AgnesSvgIcon(icon = AgnesIcon.FILM, tint = Color(0xFF52525B), size = 32.dp)
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = if (isProc) scene.progressText.ifBlank { "Génération du plan en cours..." } else "En attente de rendu",
+                                                color = if (isProc) Color(0xFFA78BFA) else Color(0xFF71717A),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
                                         }
                                     }
-                                    Text(
-                                        text = "• ${scene.camera_movement}",
-                                        color = Color(0xFF9CA3AF),
-                                        fontSize = 10.sp
-                                    )
                                 }
-                                if (scene.progressText.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Détails du plan sous le visuel
+                                Text(
+                                    text = "Caméra : ${scene.camera_movement}",
+                                    color = Color(0xFFA1A1AA),
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                if (scene.dialogue.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(3.dp))
                                     Text(
-                                        text = scene.progressText,
-                                        color = if (isDone) Color(0xFF10B981) else if (isStalled) Color(0xFFF59E0B) else Color(0xFFA78BFA),
+                                        text = "« ${scene.dialogue} »",
+                                        color = Color(0xFF93C5FD),
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium
+                                        fontStyle = FontStyle.Italic,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
-
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(
-                                        if (isDone) Color(0xFF064E3B)
-                                        else if (isStalled) Color(0xFF451A03)
-                                        else if (isProc) Color(0xFF4C1D95)
-                                        else Color(0xFF27272A)
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                        }
+                    } else {
+                        // ═════════════════════════════════════════════════
+                        // VUE COMPACTE (MINIATURE ÉLARGIE 96x128dp)
+                        // ═════════════════════════════════════════════════
+                        AgnesInteractiveCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            isStalled = isStalled,
+                            onClick = {
+                                if (hasKeyframe || hasVideo) {
+                                    triggerHapticFeedback(context)
+                                    selectedSceneForPreview = scene
+                                }
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.Top
                             ) {
-                                Text(
-                                    text = if (isDone) "Terminé" else if (isStalled) "Stall" else if (isProc) "En cours" else "En attente",
-                                    color = if (isDone) Color(0xFF34D399) else if (isStalled) Color(0xFFF59E0B) else if (isProc) Color(0xFFC084FC) else Color(0xFFA1A1AA),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .width(96.dp)
+                                        .height(128.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF181822))
+                                        .border(
+                                            1.dp,
+                                            if (isDone) Color(0xFF10B981) else if (isProc) Color(0xFF7C3AED) else Color(0xFF282836),
+                                            RoundedCornerShape(8.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (hasKeyframe) {
+                                        AsyncImage(
+                                            model = scene.keyframe,
+                                            contentDescription = scene.title,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+
+                                        if (hasVideo) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color(0x33000000)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color(0xEE7C3AED)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    AgnesSvgIcon(icon = AgnesIcon.PLAY, tint = Color.White, size = 16.dp)
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            AgnesSvgIcon(icon = AgnesIcon.FILM, tint = Color(0xFF52525B), size = 24.dp)
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text("En attente", color = Color(0xFF71717A), fontSize = 9.sp)
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Plan ${scene.number} : ${scene.title.ifBlank { "Scène ${scene.number}" }}",
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(
+                                                    if (isDone) Color(0xFF064E3B)
+                                                    else if (isStalled) Color(0xFF451A03)
+                                                    else if (isProc) Color(0xFF4C1D95)
+                                                    else Color(0xFF27272A)
+                                                )
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isDone) "Terminé" else if (isStalled) "Stall" else if (isProc) "En cours" else "En attente",
+                                                color = if (isDone) Color(0xFF34D399) else if (isStalled) Color(0xFFF59E0B) else if (isProc) Color(0xFFC084FC) else Color(0xFFA1A1AA),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (scene.narrativePhase.isNotBlank()) {
+                                            val act = scene.narrativePhase.uppercase()
+                                            val (actColor, actBg) = when {
+                                                act.contains("INTRO") -> Color(0xFF38BDF8) to Color(0xFF0C4A6E)
+                                                act.contains("CLIMAX") -> Color(0xFFFB923C) to Color(0xFF431407)
+                                                act.contains("CONCL") || act.contains("RÉSOL") -> Color(0xFF34D399) to Color(0xFF064E3B)
+                                                else -> Color(0xFFA78BFA) to Color(0xFF2E1065)
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(actBg)
+                                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(text = act, color = actColor, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        val charLabel = scene.charactersPresent.ifBlank { "Protagoniste" }
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color(0xFF20202C))
+                                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = charLabel,
+                                                color = Color(0xFFD4D4D8),
+                                                fontSize = 8.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Text(
+                                        text = "Caméra : ${scene.camera_movement}",
+                                        color = Color(0xFFA1A1AA),
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    if (hasVideo) {
+                                        Text(
+                                            text = "▶ Toucher pour visionner",
+                                            color = Color(0xFF34D399),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    } else if (hasKeyframe) {
+                                        Text(
+                                            text = if (isProc) scene.progressText.ifBlank { "Animation vidéo..." } else "🔍 Toucher pour agrandir",
+                                            color = Color(0xFFA78BFA),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Bouton Annuler la génération (Section 8)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(12.dp))
-                    .clickable {
-                        triggerHapticFeedback(context)
-                        showCancelDialog = true
-                    }
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Interrompre la production",
-                    color = Color(0xFFEF4444),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
     } else if (currentWorkflowStep == FilmWorkflowStep.DECOUPAGE) {
         // ═══════════════════════════════════════════════════════
