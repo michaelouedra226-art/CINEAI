@@ -61,7 +61,7 @@ class RateLimiter {
         const val STALL_RETRY_DELAY_MS = 8_000L
         const val MAX_STALL_RETRIES = 3
 
-        const val RETRY_429_WAIT_MS = 25_000L
+        const val RETRY_429_WAIT_MS = 90_000L
         const val RETRY_503_WAIT_MS = 10_000L
         const val IMAGE_CALL_DELAY_MS = 1_500L
 
