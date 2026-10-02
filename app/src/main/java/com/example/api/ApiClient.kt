@@ -460,16 +460,17 @@ class ApiClient(
         var antagonistBible = ""
         var visualConsistency = ""
 
-        val langRule = if (dialogueLanguage == "fr") {
-            "DIALOGUES EN FRANÇAIS OBLIGATOIRES : Chaque scène DOIT avoir une réplique parlée ou une phrase de voix off en français complet dans 'dialogue', entre guillemets « ... ». Interdiction d'anglais et interdiction de réplique vide. Indique qui parle quand c'est pertinent (ex: « Elena : Attention ! »)."
-        } else {
-            "ENGLISH SPOKEN DIALOGUE: Every scene must have a spoken dialogue or voice-over in English in 'dialogue'."
+        val spokenLanguage = if (dialogueLanguage == "fr") "français" else "anglais"
+        val langRule = when (audioPresence) {
+            "ambient" -> "MODE SANS PAROLES : laisse 'dialogue' vide dans chaque scène; aucun dialogue ni voix off intelligible."
+            "voice_over" -> "VOIX OFF EN $spokenLanguage : chaque scène contient une phrase narrative naturelle de 10 à 16 mots dans 'dialogue', adaptée à la durée du plan."
+            else -> "DIALOGUES PARLÉS EN $spokenLanguage : chaque scène contient une ou deux répliques naturelles totalisant 8 à 14 mots dans 'dialogue'. Évite les phrases trop courtes, les slogans et les clichés; indique le nom du personnage quand c'est utile."
         }
 
         val audioRule = when (audioPresence) {
-            "voice_over" -> "Voix off narrative continue en français pour chaque scène dans 'dialogue'."
-            "ambient" -> "Mode muet/sound design : laisser 'dialogue' vide."
-            else -> "Dialogues parlés vifs entre les personnages en français dans 'dialogue'."
+            "voice_over" -> "La voix off est la seule parole; synchronise son idée avec l'action et décris séparément l'ambiance dans 'sound_design'."
+            "ambient" -> "Aucune parole; détaille plutôt l'ambiance, le foley et les sons du lieu dans 'sound_design'."
+            else -> "Privilégie des échanges parlés incarnés et audibles; réserve 'sound_design' au foley, à l'acoustique et à l'ambiance musicale."
         }
 
         TechnicalLogManager.log("PHASE_1", "POST $AGNES_CHAT_URL - Écriture scénario studio ($numScenes scènes en $totalBatches lot(s), langue: $dialogueLanguage)")
@@ -516,7 +517,7 @@ class ApiClient(
                 - Des répliques incarnées, sobres, spécifiques au lore du film, ou un silence lourd habité par le sound design.
                 $langRule
                 $audioRule
-                - 'dialogue' : Réplique orale brève (4 à 8 mots) ou phrase de voix off immersive qui installe l'histoire.
+                - 'dialogue' : En mode dialogue, une ou deux répliques totalisant 8 à 14 mots; en voix off, 10 à 16 mots. La langue est celle choisie par l'utilisateur. En mode ambiance, chaîne vide.
                 - 'sound_design' : Texture sonore réaliste et organique (foley naturel, acoustique du lieu, souffle, pas, vent, nappe musicale diégétique).
 
                 PERSONNAGES EN CHAIR ET EN OS (COHÉRENCE NATURELLE) :
