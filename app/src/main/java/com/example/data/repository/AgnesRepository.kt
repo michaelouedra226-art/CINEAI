@@ -885,11 +885,19 @@ class AgnesRepository(
             }
             dialogueLanguage == "fr" -> {
                 val cleanSpeech = SceneItem.extractSpokenSpeech(scene.dialogue)
-                ", authentic spoken French dialogue, single delivery without repetition: \"$cleanSpeech\", natural conversational French cadence, authentic human voice, synchronous lip sync, actor delivers line once and stops speaking, natural room acoustics: $soundTrack, no English words"
+                if (cleanSpeech.isNotBlank()) {
+                    ", authentic spoken French dialogue, single delivery without repetition: \"$cleanSpeech\", natural conversational French cadence, authentic human voice, synchronous lip sync, actor delivers line once and stops speaking, natural room acoustics: $soundTrack, no English words"
+                } else {
+                    ", atmospheric cinematic scene with lived-in environment acoustics: $soundTrack, no spoken lines"
+                }
             }
             else -> {
                 val cleanSpeech = SceneItem.extractSpokenSpeech(scene.dialogue)
-                ", authentic spoken English dialogue, single delivery without repetition: \"$cleanSpeech\", natural conversational cadence, synchronous lip movement, actor delivers line once, natural acoustics: $soundTrack"
+                if (cleanSpeech.isNotBlank()) {
+                    ", authentic spoken English dialogue, single delivery without repetition: \"$cleanSpeech\", natural conversational cadence, synchronous lip movement, actor delivers line once, natural acoustics: $soundTrack"
+                } else {
+                    ", atmospheric cinematic scene with lived-in environment acoustics: $soundTrack, no spoken lines"
+                }
             }
         }
 

@@ -214,7 +214,7 @@ data class SceneItem(
                     cleaned = cleaned.substring(colonIndex + 1).trim()
                 }
             }
-            return cleaned.ifBlank { "Nous avançons vers l'objectif." }
+            return cleaned
         }
     }
 }

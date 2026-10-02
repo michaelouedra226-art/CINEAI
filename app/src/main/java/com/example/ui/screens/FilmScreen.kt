@@ -2188,16 +2188,39 @@ fun FilmScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 6. Prompt principal du film
-            Text(text = "6. Prompt principal du film (intrigue & univers)", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            // 6. Prompt principal du film (Sans limite de mots)
+            val promptWords = if (filmPrompt.isBlank()) 0 else filmPrompt.trim().split("\\s+".toRegex()).size
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "6. Prompt principal du film (intrigue & univers)", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF2E1065))
+                        .border(1.dp, Color(0xFF8B5CF6), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                ) {
+                    Text(text = "∞ Illimité", color = Color(0xFFC4B5FD), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Collez librement un synopsis complet, un conte avec introduction de village, une bible ou un scénario détaillé. Aucune restriction de mots.",
+                color = Color(0xFF71717A),
+                fontSize = 11.sp,
+                lineHeight = 15.sp
+            )
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = filmPrompt,
                 onValueChange = { filmPrompt = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(105.dp),
-                placeholder = { Text("Décrivez l'intrigue, les personnages et les ambiances...", color = Color(0xFF555566)) },
+                    .height(130.dp),
+                placeholder = { Text("Décrivez l'intrigue, le contexte d'ouverture (ex: dans un village...), les personnages, les rencontres et les scènes d'action...", color = Color(0xFF555566), fontSize = 13.sp) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = Color(0xFF13131A),
                     unfocusedContainerColor = Color(0xFF13131A),
@@ -2208,6 +2231,15 @@ fun FilmScreen(
                 ),
                 shape = RoundedCornerShape(12.dp)
             )
+            if (promptWords > 0) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "$promptWords mot(s) saisis • Prise en charge intégrale sans troncature",
+                    color = Color(0xFFA78BFA),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 

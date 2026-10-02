@@ -491,58 +491,59 @@ class ApiClient(
 
             val systemPrompt = if (batchIndex == 0) {
                 """
-                Tu es un cinéaste d'exception réputé pour son réalisme humain, sa justesse émotionnelle et sa mise en scène organique (style Denis Villeneuve, Jacques Audiard, Alfonso Cuarón).
-                Tu conçois un film captivant, profondément vivant et d'un réalisme saisissant.
-                Chaque scène doit donner l'impression indiscutable d'avoir été écrite par un être humain, cadrée par un chef opérateur au regard sensible, et interprétée par de vrais acteurs.
-                ZÉRO CLICHÉ ARTIFICIEL D'IA, ZÉRO DIALOGUE ROBOTIQUE, ZÉRO RÉPÉTITION.
+                Tu es un réalisateur et scénariste de cinéma de renommée internationale, primé pour la puissance de sa mise en scène, son réalisme viscéral et sa direction d'acteurs de niveau studio (références : Denis Villeneuve, Christopher Nolan, Jacques Audiard, Alfonso Cuarón, Hayao Miyazaki).
+                Tu écris un film marquant, saisissant et cinématographiquement exceptionnel.
+                Chaque plan doit témoigner d'une véritable grammaire de cinéma : intelligence du cadre, dynamique des points de vue, authenticité humaine absolue.
+                INTERDICTION FORMELLE DE CLICHÉS D'IA, DE DIALOGUES ROBOTIQUES ET DE TOUTE RÉPÉTITION.
 
-                PROGRESSION DRAMATIQUE RÉALISTE EN 4 ACTES (pour les $numScenes plans) :
-                - ACTE 1 : INTRODUCTION & ANCRAGE CONCRET (plans 1 à ~25%) :
-                  * Plan 1 OBLIGATOIRE : Vrai plan d'établissement cinématographique atmosphérique. Un lieu habité, une lumière naturelle (aube, pluie, soleil déclinant, intérieur tamisé), des bruits de vie ambiants sans visage au centre.
-                  * Plans suivants : Le protagoniste est saisi dans un geste concret, humain et intime du quotidien (attacher un manteau, consulter un message, regarder par la fenêtre), avant qu'un événement réel et plausible ne vienne faire basculer sa routine.
-                - ACTE 2 : DÉVELOPPEMENT & DYNAMIQUES HUMAINES (plans ~26% à ~70%) :
-                  * Progression organique de la situation : doutes, regards complices, gestes nerveux, fatigue palpable, réactions physiques réelles.
-                  * VARIÉTÉ DU DÉCOUPAGE : Un vrai réalisateur varie les angles : plan large pour situer la scène dans l'espace, plan moyen pour les gestes et la posture corporelle, gros plan sur une main, un objet ou un regard intense.
-                  * Des personnages secondaires et antagonistes vivants, qui existent par eux-mêmes.
-                - ACTE 3 : POINT DE TENSION & VULNÉRABILITÉ (plans ~71% à ~85%) :
-                  * Montée de tension crédible : ce n'est pas du spectacle creux, mais une urgence humaine viscérale, une hésitation lourde, un choix difficile.
-                - ACTE 4 : CONCLUSION & ATTERRISSAGE ÉMOTIONNEL (plans ~86% à 100%) :
-                  * Résolution sobre et juste : soulagement, silence partagé, la vie qui reprend, plan final poétique et contemplatif qui reste en mémoire.
+                1. OUVERTURE & INTRODUCTION ADAPTATIVE AU GENRE :
+                - L'introduction ne doit JAMAIS être statique ni stéréotypée : elle doit épouser plastiquement la nature du film.
+                - Si l'histoire est un conte, une fable, une aventure mythologique, un drame historique ou rural (ex: village, royaume, contrée lointaine) :
+                  * Poser le cadre et l'immersion contextuelle : le village, son architecture, ses reliefs, les légendes ou l'époque (« Il était une fois dans un village perché sur les crêtes... », ou description poétique de l'atmosphère, de la fumée des toits, du vent dans les collines avant que le drame ne se noue).
+                - Si le film est un thriller, polar, action ou SF :
+                  * Ouvrir selon la dynamique du genre : in media res, tension nocturne, plan de situation architectural vertigineux ou geste intime décisif.
 
-                PERSONNAGES EN CHAIR ET EN OS (COHÉRENCE NATURELLE) :
-                - 'protagonist_bible' : Nom + silhouette, visage humain expressif, vêtements réels de tous les jours avec détails tangibles (texture du tissu, usure naturelle).
-                - 'supporting_cast_bible' : Nom + rôle + présence contrastée et humaine.
-                - 'antagonist_bible' : Nom + rôle + motivation tangible et regard crédible.
-                - 'visual_consistency' : Style $style, éclairage naturel diégétique, grain argentique 35mm, textures réelles.
+                2. DÉCOUPAGE TECHNIQUE MULTI-AXES ET VARIÉTÉ DES CADRAGES (NIVEAU STUDIO) :
+                - RÈGLE D'OR : INTERDICTION ABSOLUE D'ENFERMER LA CAMÉRA SUR LE PERSONNAGE PRINCIPAL.
+                - ALTERNANCE DES POINTS DE VUE ET CONTRE-CHAMPS OBLIGATOIRES :
+                  * Quand un personnage marche vers un autre pour le rencontrer : le plan suivant NE RESTE PAS sur son dos ! Il bascule IMMÉDIATEMENT en contre-champ sur le second personnage qui l'attend ou le regarde arriver, ou en plan large montrant leur face-à-face dans l'espace.
+                  * Scènes de combat ou d'action : alternance dynamique entre plan large chorégraphié (lisibilité spatiale du combat), plan serré percutant (impact, garde, esquive), plan de réaction sur l'adversaire déstabilisé ou déterminé, et contre-plongée dramatique.
+                  * Plans de respiration : plans d'ensemble immersifs du décor sans silhouette au centre, inserts sur des détails tangibles (mains, arme, regard, objet clé).
+                - Répartition équilibrée de l'attention caméra : Protagoniste, Secondaire / Allié, Antagoniste / Menace, Duo en vis-à-vis, et Environnement seul.
 
-                PAROLES HUMAINES VIVANTES (UNE SEULE RÉPLIQUE COURTE, JAMAIS RÉPÉTÉE) :
+                3. DIALOGUES HUMAINS, VIVANTS ET SANS AUCUN CLICHÉ :
+                - PROHIBITION FORMELLE des phrases toutes faites de série B (« Garde ton sang-froid », « La prochaine étape sera décisive », « Nous irons jusqu'au bout ensemble », « Pas le droit à l'erreur »).
+                - Des répliques incarnées, sobres, spécifiques au lore du film, ou un silence lourd habité par le sound design.
                 $langRule
                 $audioRule
-                - Règles strictes pour 'dialogue' :
-                  * Phrases brèves et naturelles (4 à 8 mots maximum), comme dans une vraie conversation.
-                  * AUCUNE répétition de mots, AUCUNE tirade théâtrale.
-                  * Format : « Elena : Attends un instant. » ou « Marcus : Regarde par ici. » ou « Voix off : Je savais que tout allait changer. ».
-                - 'sound_design' : Acoustique réelle du décor (écho d'une pièce, bruits de pas sur le pavé, souffle du vent, foley naturel, ambiance musicale sobre).
+                - 'dialogue' : Réplique orale brève (4 à 8 mots) ou phrase de voix off immersive qui installe l'histoire.
+                - 'sound_design' : Texture sonore réaliste et organique (foley naturel, acoustique du lieu, souffle, pas, vent, nappe musicale diégétique).
+
+                PERSONNAGES EN CHAIR ET EN OS (COHÉRENCE NATURELLE) :
+                - 'protagonist_bible' : Nom + silhouette, visage humain expressif, vêtements réels avec textures tangibles.
+                - 'supporting_cast_bible' : Nom + rôle + visage et tenue contrastée d'un allié ou personnage secondaire fort.
+                - 'antagonist_bible' : Nom + motivation tangible + présence visuelle distincte.
+                - 'visual_consistency' : Style $style, grain argentique 35mm, palette et lumière diégétique réaliste.
 
                 Réponds EXCLUSIVEMENT en JSON compact sans balises markdown :
                 {
                   "film_title": "Titre cinématographique réaliste",
-                  "logline": "Accroche humaine résumant l'émotion et l'enjeu du film",
-                  "protagonist_bible": "Description physique d'une personne réelle, vêtements et traits distinctifs",
-                  "supporting_cast_bible": "Description de l'allié, look réaliste et distinct",
-                  "antagonist_bible": "Description de l'antagoniste, présence crédible et vivante",
+                  "logline": "Accroche forte résumant le cœur dramatique du film",
+                  "protagonist_bible": "Description physique du héros, tenue et détails visuels",
+                  "supporting_cast_bible": "Description de l'allié ou personnage rencontré, tenue et traits distincts",
+                  "antagonist_bible": "Description de l'antagoniste ou de la menace, carrure et présence",
                   "visual_consistency": "Atmosphère visuelle $style, lumière naturelle et grain 35mm",
                   "scenes": [
                     {
                       "number": 1,
                       "act": "INTRODUCTION",
-                      "shot_type": "Plan d'ensemble atmosphérique",
-                      "characters_present": "Décor seul / Ambiance vécue",
-                      "title": "Titre du plan",
-                      "action": "Description vivante, sensorielle et réaliste de l'action",
-                      "dialogue": "Voix off : « Réplique humaine courte et sobre »",
-                      "sound_design": "Ambiance sonore réelle des lieux et foley naturel",
-                      "camera": "Travelling lent et stable à hauteur d'homme"
+                      "shot_type": "Plan d'ensemble panoramique ou Contre-champ ou Plan moyen ou Chorégraphie",
+                      "characters_present": "Décor / Ambiance OU Protagoniste OU Secondaire OU Antagoniste OU Duo",
+                      "title": "Titre cinématographique du plan",
+                      "action": "Description précise et dynamique du plan (angles, mouvements réels, interactions physiques)",
+                      "dialogue": "Voix off : « Phrase immersive d'ouverture » OU « Personnage : Réplique vivante et naturelle »",
+                      "sound_design": "Acoustique précise du décor et foley réaliste",
+                      "camera": "Mouvement fluide (Travelling latéral, Contre-champ fluide, Panoramique, Caméra épaule immersive)"
                     }
                   ]
                 }
@@ -550,17 +551,19 @@ class ApiClient(
                 """.trimIndent()
             } else {
                 """
-                Tu es un cinéaste d'exception réputé pour son réalisme humain et la justesse de ses personnages. Poursuis le film "$filmTitle".
-                PERSONNAGES IMMUABLES :
+                Tu es un réalisateur de cinéma de renommée internationale. Poursuis la mise en scène du film "$filmTitle".
+                CONTINUITÉ VISUELLE STRICTE :
                 - Protagoniste : "$protagonistBible"
-                - Allié : "$supportingCastBible"
+                - Allié / Secondaire : "$supportingCastBible"
                 - Antagoniste : "$antagonistBible"
                 - Style visuel : "$visualConsistency"
-                Plan précédent : "${allDrafts.lastOrNull()?.title}" - "${allDrafts.lastOrNull()?.description}".
+                Plan précédent (Plan ${allDrafts.lastOrNull()?.number ?: (startScene - 1)}) : "${allDrafts.lastOrNull()?.title}" - "${allDrafts.lastOrNull()?.description}" (Cadrage : ${allDrafts.lastOrNull()?.cameraMovement}).
 
-                PROGRESSION NATURELLE ET HUMAINE :
-                Poursuis le déroulement organique en variant les points de vue (scènes de duo, réactions des uns et des autres, plans d'ambiance).
-                RAPPEL CRUCIAL : Des dialogues courts, vivants, oraux et sobres (max 6-8 mots), prononcés une seule fois sans répétition.
+                VARIATION DE MISE EN SCÈNE OBLIGATOIRE (RÈGLE DU CONTRE-CHAMP & DE L'ACTION) :
+                - Si le plan précédent montrait un personnage avançant vers un autre : coupe OBLIGATOIREMENT sur l'autre personnage qui attend/réagit (contre-champ), ou plan large montrant les deux personnages se faisant face.
+                - En cas d'action ou combat : alterne entre chorégraphie d'ensemble, plan rapproché sur le choc ou la parade, et réaction de l'adversaire.
+                - Ne reste pas bloqué sur le personnage principal : fais vivre les personnages secondaires, l'antagoniste et le décor.
+                - AUCUN cliché artificiel (« Garde ton sang-froid », « Décisive », « Jusqu'au bout » sont STRICTEMENT INTERDITS). Des dialogues vrais, ancrés dans la scène.
                 $langRule
                 $audioRule
 
@@ -570,13 +573,13 @@ class ApiClient(
                     {
                       "number": $startScene,
                       "act": "DÉVELOPPEMENT",
-                      "shot_type": "Plan moyen vivant",
-                      "characters_present": "Allié / Secondaire",
+                      "shot_type": "Contre-champ / Réaction ou Plan large duel ou Plan moyen allié",
+                      "characters_present": "Secondaire / Allié ou Antagoniste ou Duo ou Protagoniste",
                       "title": "Titre court",
-                      "action": "Description réaliste et humaine de l'action",
-                      "dialogue": "« Réplique courte et naturelle en français »",
-                      "sound_design": "Bruitages réalistes du décor et tension sonore discrète",
-                      "camera": "Cadre naturel à hauteur d'homme"
+                      "action": "Description dynamique de la scène sans focalisation exclusive sur le héros",
+                      "dialogue": "« Réplique vivante, contextuelle et originale en français »",
+                      "sound_design": "Foley réaliste et tension acoustique des lieux",
+                      "camera": "Axe caméra dynamique à hauteur d'homme"
                     }
                   ]
                 }
@@ -625,26 +628,11 @@ class ApiClient(
                             protagonistBible = if (extractedProtagonist.isNotBlank()) {
                                 extractedProtagonist
                             } else {
-                                "Héros principal aux traits cinématographiques distinctifs, tenue invariable détaillée ($style)"
+                                prompt.take(120)
                             }
-                            val extractedSecondary = scriptJson.optString("supporting_cast_bible", "")
-                            supportingCastBible = if (extractedSecondary.isNotBlank()) {
-                                extractedSecondary
-                            } else {
-                                "Personnage allié au look contrasté et tenue spécifique invariable ($style)"
-                            }
-                            val extractedAntagonist = scriptJson.optString("antagonist_bible", "")
-                            antagonistBible = if (extractedAntagonist.isNotBlank()) {
-                                extractedAntagonist
-                            } else {
-                                "Antagoniste marquant à l'aura menaçante et costume sombre invariable ($style)"
-                            }
-                            val extractedVis = scriptJson.optString("visual_consistency", "")
-                            visualConsistency = if (extractedVis.isNotBlank()) {
-                                extractedVis
-                            } else {
-                                "Palette cinématographique $style, éclairage soigné, 9:16 vertical cinema, 35mm grain, 8k"
-                            }
+                            supportingCastBible = scriptJson.optString("supporting_cast_bible", "")
+                            antagonistBible = scriptJson.optString("antagonist_bible", "")
+                            visualConsistency = scriptJson.optString("visual_consistency", style)
                         }
 
                         val scenesArray = scriptJson.optJSONArray("scenes") ?: JSONArray()
@@ -667,50 +655,81 @@ class ApiClient(
                                 else -> "CONCLUSION"
                             }
                             val act = sObj.optString("act", defaultAct).uppercase()
-                            val shotType = sObj.optString("shot_type", if (targetNum == 1) "Plan d'ensemble large" else "Plan moyen")
+                            val shotType = sObj.optString("shot_type", if (targetNum == 1) "Plan d'ensemble panoramique" else "Plan moyen")
 
                             val isNoCharacter = charsPresent.contains("aucun", ignoreCase = true) ||
                                 charsPresent.contains("décor", ignoreCase = true) ||
                                 charsPresent.contains("paysage", ignoreCase = true) ||
                                 charsPresent.contains("monde", ignoreCase = true) ||
+                                charsPresent.contains("village", ignoreCase = true) && !charsPresent.contains("protagoniste", ignoreCase = true) ||
                                 charsPresent.contains("none", ignoreCase = true) ||
-                                (targetNum == 1 && shotType.contains("ensemble", ignoreCase = true))
+                                (targetNum == 1 && (shotType.contains("ensemble", ignoreCase = true) || shotType.contains("panoramique", ignoreCase = true)))
 
-                            val isAntagonistOnly = !isNoCharacter && (
-                                charsPresent.contains("antagoniste", ignoreCase = true) ||
-                                charsPresent.contains("rival", ignoreCase = true) ||
-                                charsPresent.contains("ennemi", ignoreCase = true)
+                            val isCounterShot = !isNoCharacter && (
+                                shotType.contains("contre-champ", ignoreCase = true) ||
+                                shotType.contains("réaction", ignoreCase = true) ||
+                                actionDesc.contains("contre-champ", ignoreCase = true) ||
+                                charsPresent.contains("contre-champ", ignoreCase = true) ||
+                                actionDesc.contains("regarde approcher", ignoreCase = true) ||
+                                actionDesc.contains("attend", ignoreCase = true) && !charsPresent.contains("protagoniste seul", ignoreCase = true)
                             )
 
-                            val isSecondaryOnly = !isNoCharacter && !isAntagonistOnly && (
+                            val isCombat = !isNoCharacter && (
+                                actionDesc.contains("combat", ignoreCase = true) ||
+                                actionDesc.contains("choc", ignoreCase = true) ||
+                                actionDesc.contains("frappe", ignoreCase = true) ||
+                                actionDesc.contains("épée", ignoreCase = true) ||
+                                actionDesc.contains("parade", ignoreCase = true) ||
+                                actionDesc.contains("duel", ignoreCase = true) ||
+                                shotType.contains("combat", ignoreCase = true) ||
+                                shotType.contains("duel", ignoreCase = true) ||
+                                shotType.contains("chorégraphie", ignoreCase = true)
+                            )
+
+                            val isConfrontation = !isNoCharacter && !isCombat && (
+                                charsPresent.contains("confrontation", ignoreCase = true) ||
+                                (charsPresent.contains("antagoniste", ignoreCase = true) && charsPresent.contains("protagoniste", ignoreCase = true)) ||
+                                actionDesc.contains("face-à-face", ignoreCase = true)
+                            )
+
+                            val isDuo = !isNoCharacter && !isConfrontation && !isCombat && (
+                                charsPresent.contains("duo", ignoreCase = true) ||
+                                charsPresent.contains(" et ", ignoreCase = true) ||
+                                charsPresent.contains("&")
+                            )
+
+                            val isAntagonistOnly = !isNoCharacter && !isCombat && !isConfrontation && (
+                                charsPresent.contains("antagoniste", ignoreCase = true) ||
+                                charsPresent.contains("rival", ignoreCase = true) ||
+                                charsPresent.contains("ennemi", ignoreCase = true) ||
+                                charsPresent.contains("menace", ignoreCase = true)
+                            )
+
+                            val isSecondaryOnly = !isNoCharacter && !isCombat && !isConfrontation && !isAntagonistOnly && (
                                 charsPresent.contains("secondaire", ignoreCase = true) ||
                                 charsPresent.contains("allié", ignoreCase = true) ||
                                 charsPresent.contains("mentor", ignoreCase = true) ||
                                 charsPresent.contains("compagnon", ignoreCase = true)
                             )
 
-                            val isConfrontation = !isNoCharacter && (
-                                charsPresent.contains("confrontation", ignoreCase = true) ||
-                                (charsPresent.contains("antagoniste", ignoreCase = true) && charsPresent.contains("protagoniste", ignoreCase = true))
-                            )
-
-                            val isDuo = !isNoCharacter && !isConfrontation && (
-                                charsPresent.contains("duo", ignoreCase = true) ||
-                                charsPresent.contains(" et ", ignoreCase = true) ||
-                                charsPresent.contains("&")
-                            )
-
                             val sceneCharacterAnchor = when {
-                                isNoCharacter -> "Cinematic scenery, architectural depth, environmental establishing shot without people"
-                                isConfrontation && antagonistBible.isNotBlank() -> "[Protagonist: $protagonistBible] in intense dramatic face-off against [Antagonist: $antagonistBible]"
-                                isDuo && supportingCastBible.isNotBlank() -> "[Protagonist: $protagonistBible] side-by-side with [Ally: $supportingCastBible]"
-                                isAntagonistOnly && antagonistBible.isNotBlank() -> "[Antagonist Focus: $antagonistBible]"
-                                isSecondaryOnly && supportingCastBible.isNotBlank() -> "[Supporting Ally Focus: $supportingCastBible]"
+                                isNoCharacter -> "Cinematic scenery, environmental spatial architecture, lived-in world without human presence"
+                                isCombat && antagonistBible.isNotBlank() -> "[Dynamic Action Choreography: $protagonistBible engaged in high-tension physical martial combat against $antagonistBible, wide framing, authentic physical impacts and athletic movement]"
+                                isCounterShot -> {
+                                    val otherChar = if (supportingCastBible.isNotBlank()) supportingCastBible else antagonistBible.ifBlank { protagonistBible }
+                                    "[Cinematic Reverse Angle / Counter-Shot: $otherChar, observing the arrival, nuanced human facial expression and intense eye contact]"
+                                }
+                                isConfrontation && antagonistBible.isNotBlank() -> "[Tense Two-Shot Face-off: $protagonistBible facing $antagonistBible in same cinematic frame, psychological standoff]"
+                                isDuo && supportingCastBible.isNotBlank() -> "[Cinematic Two-Shot: $protagonistBible side-by-side with $supportingCastBible, authentic mutual interaction]"
+                                isAntagonistOnly && antagonistBible.isNotBlank() -> "[Antagonist Focus: $antagonistBible, menacing presence and calculated movements]"
+                                isSecondaryOnly && supportingCastBible.isNotBlank() -> "[Supporting Ally Focus: $supportingCastBible, autonomous character action and distinct screen presence]"
                                 else -> "[Protagonist Focus: $protagonistBible]"
                             }
 
                             val charactersPresentLabel = when {
                                 isNoCharacter -> "Décor / Ambiance"
+                                isCombat -> "Chorégraphie Combat / Duel"
+                                isCounterShot -> "Contre-champ / Réaction"
                                 isConfrontation -> "Face-à-face (Protagoniste & Antagoniste)"
                                 isDuo -> "Duo (Protagoniste & Allié)"
                                 isAntagonistOnly -> "Antagoniste / Menace"
@@ -721,11 +740,16 @@ class ApiClient(
                             val humanCinematicStyle = "shot on 35mm film, Kodak Vision3, natural realistic lighting, authentic lived-in textures, natural human skin tones, documentary cinema realism, $visualConsistency, 9:16 vertical format"
 
                             val unifiedImagePrompt = if (isNoCharacter) {
-                                "$prompt, [ESTABLISHING SHOT - SCENERY ONLY], scène $targetNum [$act - $shotType]: $title - $actionDesc, $humanCinematicStyle"
+                                "$prompt, [ESTABLISHING SHOT - SCENERY & WORLD], scène $targetNum [$act - $shotType]: $title - $actionDesc, $humanCinematicStyle"
                             } else {
-                                "$prompt, [MASTER CHARACTER CONTINUITY: $sceneCharacterAnchor, identical facial features, realistic natural clothing], scène $targetNum [$act - $shotType]: $title - $actionDesc, $humanCinematicStyle"
+                                "$prompt, [MASTER CINEMATIC CONTINUITY: $sceneCharacterAnchor, identical facial features, realistic natural clothing], scène $targetNum [$act - $shotType]: $title - $actionDesc, $humanCinematicStyle"
                             }
-                            val unifiedVideoPrompt = "$camMovement, $actionDesc, natural human motion, organic camera framing, realistic physical interaction"
+                            val unifiedVideoPrompt = when {
+                                isCombat -> "$camMovement, dynamic combat choreography, $actionDesc, physical martial clash, fluid defensive stance and impacts, wide cinematic action framing"
+                                isCounterShot -> "$camMovement, reverse angle counter-shot, $actionDesc, intense human gaze, reaction to the approaching character, cinematic timing"
+                                isNoCharacter -> "$camMovement, atmospheric world discovery, $actionDesc, natural ambient motion, smoke, wind, lighting dynamics"
+                                else -> "$camMovement, $actionDesc, natural human movement, organic camera framing, realistic physical interaction"
+                            }
 
                             allDrafts.add(
                                 GeneratedSceneDraft(
@@ -758,16 +782,16 @@ class ApiClient(
                             val fallbackSound = "Nappe sonore sobre, acoustique naturelle du lieu et foley discret"
                             val fallbackDialogue = enforceCleanDialogue("", fallbackDesc, dialogueLanguage, audioPresence, nextNum)
 
-                            val isSecFallback = nextNum % 3 == 0 && supportingCastBible.isNotBlank()
-                            val isAntagFallback = nextNum % 4 == 0 && antagonistBible.isNotBlank()
+                            val isCounter = nextNum % 2 == 0 && supportingCastBible.isNotBlank()
+                            val isAntag = nextNum % 3 == 0 && antagonistBible.isNotBlank()
                             val fallbackAnchor = when {
-                                isAntagFallback -> "[Antagonist: $antagonistBible]"
-                                isSecFallback -> "[Ally/Supporting: $supportingCastBible]"
+                                isCounter -> "[Cinematic Counter-Shot / Ally: $supportingCastBible]"
+                                isAntag -> "[Antagonist Focus: $antagonistBible]"
                                 else -> "[Protagonist: $protagonistBible]"
                             }
                             val charLabel = when {
-                                isAntagFallback -> "Antagoniste / Menace"
-                                isSecFallback -> "Allié / Secondaire"
+                                isCounter -> "Contre-champ / Secondaire"
+                                isAntag -> "Antagoniste / Menace"
                                 else -> "Protagoniste"
                             }
 
@@ -777,8 +801,8 @@ class ApiClient(
                                     title = "Plan $nextNum : Séquence $charLabel",
                                     description = fallbackDesc,
                                     imagePrompt = "$prompt, [MASTER CONTINUITY: $fallbackAnchor], scène $nextNum [$defaultAct]: $fallbackDesc, shot on 35mm film, natural lighting, $visualConsistency, 9:16 vertical format",
-                                    videoPrompt = "Travelling avant, $fallbackDesc, natural human movement, organic camera framing",
-                                    cameraMovement = "Travelling avant",
+                                    videoPrompt = "Travelling dynamique, $fallbackDesc, natural human movement, organic camera framing",
+                                    cameraMovement = if (nextNum % 2 == 0) "Contre-champ fluide" else "Travelling avant",
                                     dialogue = fallbackDialogue,
                                     audioMode = audioPresence,
                                     characterAnchor = fallbackAnchor,
@@ -814,18 +838,18 @@ class ApiClient(
                     val fallbackDialogue = enforceCleanDialogue("", fallbackDesc, dialogueLanguage, audioPresence, n)
 
                     val isNoCharFallback = n == 1
-                    val isSecFallback = !isNoCharFallback && n % 3 == 0 && supportingCastBible.isNotBlank()
-                    val isAntagFallback = !isNoCharFallback && n % 4 == 0 && antagonistBible.isNotBlank()
+                    val isCounterFallback = !isNoCharFallback && n % 2 == 0 && supportingCastBible.isNotBlank()
+                    val isAntagFallback = !isNoCharFallback && n % 3 == 0 && antagonistBible.isNotBlank()
                     val fallbackAnchor = when {
                         isNoCharFallback -> "Cinematic scenery, environmental and architectural details without characters"
+                        isCounterFallback -> "[Counter-Shot Reaction: $supportingCastBible]"
                         isAntagFallback -> "[Antagonist: $antagonistBible]"
-                        isSecFallback -> "[Ally/Supporting: $supportingCastBible]"
                         else -> "[Protagonist: $protagonistBible]"
                     }
                     val charLabel = when {
                         isNoCharFallback -> "Décor / Ambiance"
+                        isCounterFallback -> "Contre-champ / Réaction"
                         isAntagFallback -> "Antagoniste / Menace"
-                        isSecFallback -> "Allié / Secondaire"
                         else -> "Protagoniste"
                     }
 
@@ -836,7 +860,7 @@ class ApiClient(
                             description = fallbackDesc,
                             imagePrompt = "$prompt, [Character Bible: $fallbackAnchor], plan $n [$defaultAct], shot on 35mm film, natural lighting, $visualConsistency, 9:16 vertical format",
                             videoPrompt = "Continuous smooth camera motion, natural human movement, organic camera framing",
-                            cameraMovement = if (n % 2 == 0) "Panoramique fluide" else "Travelling avant",
+                            cameraMovement = if (n % 2 == 0) "Contre-champ fluide" else "Travelling avant",
                             dialogue = fallbackDialogue,
                             audioMode = audioPresence,
                             characterAnchor = fallbackAnchor,
@@ -849,7 +873,7 @@ class ApiClient(
         }
 
         usageTracker.recordTextRequest()
-        TechnicalLogManager.log("PHASE_1", "Scénario complet finalisé avec succès: ${allDrafts.size} scènes générées (structure 4 actes, casting varié, langue $dialogueLanguage)")
+        TechnicalLogManager.log("PHASE_1", "Scénario complet finalisé avec succès: ${allDrafts.size} scènes générées (structure studio, multi-angles, casting étendu, langue $dialogueLanguage)")
         val finalCharacterConsistency = buildString {
             append("Protagoniste: $protagonistBible")
             if (supportingCastBible.isNotBlank()) append(" | Allié: $supportingCastBible")
@@ -859,8 +883,8 @@ class ApiClient(
     }
 
     /**
-     * Valide et garantit la langue et la complétude des dialogues cinématographiques.
-     * Élimine les répliques en anglais et empêche toute scène muette involontaire en français.
+     * Valide et garantit la langue et la pertinence des répliques cinématographiques.
+     * Respecte rigoureusement les dialogues écrits par le modèle et bannit les clichés stéréotypés.
      */
     private fun enforceCleanDialogue(
         raw: String,
@@ -872,69 +896,16 @@ class ApiClient(
         if (audioMode == "ambient") return ""
         val trimmed = raw.trim()
 
-        val englishWordsRegex = Regex("\\b(the|is|are|was|were|you|your|we|our|they|their|what|where|when|why|who|how|look|listen|hurry|run|come|let's|don't|can't|won't|wait|please|here|there|stop|help|okay|yeah|yes|no way|oh my god|good|bad|right|now|something|someone)\\b", RegexOption.IGNORE_CASE)
-        val frenchWordsRegex = Regex("\\b(le|la|les|un|une|des|du|de|ce|cet|cette|ces|je|tu|il|elle|on|nous|vous|ils|elles|mon|ma|mes|ton|ta|tes|son|sa|ses|dans|pour|avec|sans|sur|sous|par|mais|ou|et|donc|or|ni|car|pas|ne|plus|rien|tout|fait|faire|aller|suis|est|sommes|êtes|sont|ici|là|vite|regarde|écoute|attends|allons|pourquoi|comment|quand|qui|que|quoi)\\b", RegexOption.IGNORE_CASE)
-
-        if (language == "fr") {
-            val hasEnglish = englishWordsRegex.containsMatchIn(trimmed)
-            val hasFrench = frenchWordsRegex.containsMatchIn(trimmed)
-
-            if (trimmed.isBlank() || (hasEnglish && !hasFrench) || trimmed.equals("null", ignoreCase = true)) {
-                val descLower = description.lowercase()
-                val frenchLine = when {
-                    descLower.contains("danger") || descLower.contains("fuit") || descLower.contains("court") || descLower.contains("poursuit") || descLower.contains("combat") || descLower.contains("ennemi") -> {
-                        when (sceneNum % 4) {
-                            0 -> "Vite, par ici ! Ne reste pas découvert !"
-                            1 -> "Ils approchent, nous devons accélérer le pas !"
-                            2 -> "Baisse-toi ! Ils ne doivent pas nous repérer."
-                            else -> "Tiens bon, l'issue est juste devant nous !"
-                        }
-                    }
-                    descLower.contains("découvr") || descLower.contains("trouv") || descLower.contains("regard") || descLower.contains("porte") || descLower.contains("salle") || descLower.contains("indice") -> {
-                        when (sceneNum % 4) {
-                            0 -> "Regarde ça... Les relevés indiquent que c'est bien ici."
-                            1 -> "Incroyable. Cet endroit n'a pas été ouvert depuis des décennies."
-                            2 -> "Les mécanismes sont encore intacts... Faisons attention."
-                            else -> "C'est exactement ce que nous cherchions depuis le début."
-                        }
-                    }
-                    descLower.contains("nuit") || descLower.contains("sombre") || descLower.contains("ombre") || descLower.contains("peur") || descLower.contains("mystère") -> {
-                        when (sceneNum % 3) {
-                            0 -> "Le silence de ces lieux n'a rien de naturel..."
-                            1 -> "Reste vigilant, chaque recoin peut dissimuler un piège."
-                            else -> "Nous ne sommes pas seuls ici, je peux le sentir."
-                        }
-                    }
-                    audioMode == "voice_over" -> {
-                        when (sceneNum % 4) {
-                            0 -> "Chaque seconde nous rapproche de la vérité, ou de notre perte."
-                            1 -> "Le temps semblait suspendu, comme avant chaque grande tempête."
-                            2 -> "Les souvenirs s'effacent peu à peu, mais notre serment demeure absolu."
-                            else -> "Au bout du chemin, la lumière finira par percer les ténèbres."
-                        }
-                    }
-                    else -> {
-                        when (sceneNum % 5) {
-                            0 -> "Nous n'avons plus le droit à l'erreur désormais."
-                            1 -> "Prépare-toi, la prochaine étape sera décisive."
-                            2 -> "Garde ton sang-froid, nous irons jusqu'au bout ensemble."
-                            3 -> "Observe bien les alentours avant d'avancer d'un pas."
-                            else -> "Rien ne pourra nous faire reculer à présent."
-                        }
-                    }
-                }
-                return "« $frenchLine »"
-            }
-
+        // Si une réplique a été écrite par le modèle ou l'utilisateur (non vide et non "null")
+        if (trimmed.isNotBlank() && !trimmed.equals("null", ignoreCase = true)) {
             val clean = trimmed.replace("«", "").replace("»", "").replace("\"", "").trim()
-            return "« $clean »"
-        } else {
-            if (trimmed.isBlank() || trimmed.equals("null", ignoreCase = true)) {
-                return "\"We have to keep moving forward, no matter what.\""
+            if (clean.isNotBlank()) {
+                return if (language == "fr") "« $clean »" else "\"$clean\""
             }
-            val clean = trimmed.replace("\"", "").replace("«", "").replace("»", "").trim()
-            return "\"$clean\""
         }
+
+        // Si aucun dialogue n'a été spécifié pour ce plan, la scène est purement visuelle et sonore (aucun texte inventé ou stéréotypé en dur)
+        return ""
     }
 
     /**
