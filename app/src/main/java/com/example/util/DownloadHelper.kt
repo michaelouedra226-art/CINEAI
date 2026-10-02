@@ -158,4 +158,145 @@ object DownloadHelper {
         clipboard.setPrimaryClip(clip)
         Toast.makeText(context, "Prompt copié dans le presse-papier", Toast.LENGTH_SHORT).show()
     }
+
+    fun shareFile(
+        context: Context,
+        file: File,
+        title: String,
+        mimeType: String = "video/mp4"
+    ) {
+        try {
+            if (!file.exists()) {
+                Toast.makeText(context, "Fichier introuvable pour le partage", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeType
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, title)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "Partager le film studio"))
+        } catch (e: Exception) {
+            Toast.makeText(context, "Erreur de partage: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun shareText(context: Context, text: String, title: String) {
+        try {
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, title)
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "Partager le scénario studio"))
+        } catch (e: Exception) {
+            Toast.makeText(context, "Impossible de partager le texte", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun copyTextToClipboard(context: Context, text: String, label: String = "Scénario") {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText(label, text)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(context, "$label copié dans le presse-papier", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Génère un scénario complet au format standard Hollywood / Studio professionnel (Axe 5)
+     */
+    fun generateHollywoodScreenplay(film: com.example.data.model.FilmEntity): String {
+        val scenes = com.example.data.model.SceneItem.parseList(film.scenesJson)
+        val sb = StringBuilder()
+
+        sb.append("=================================================================\n")
+        sb.append("                   AGNES STUDIO PRODUCTION SCRIPT\n")
+        sb.append("=================================================================\n\n")
+        sb.append("TITRE : ${film.title.uppercase()}\n")
+        if (film.logline.isNotBlank()) {
+            sb.append("LOGLINE : ${film.logline}\n")
+        }
+        sb.append("STYLE CINÉMATOGRAPHIQUE : ${film.filmStyle}\n")
+        sb.append("DURÉE ESTIMÉE : ${film.duration.toInt()} secondes (${scenes.size} plans)\n")
+        sb.append("FORMAT DU PROJET : 9:16 Vertical Cinéma (24 fps)\n\n")
+
+        // Section Casting & Continuité
+        val characters = mutableMapOf<String, String>()
+        scenes.forEach { sc ->
+            if (sc.characterAnchor.isNotBlank()) {
+                val label = sc.charactersPresent.ifBlank { "Personnage principal" }
+                if (!characters.containsKey(label)) {
+                    characters[label] = sc.characterAnchor
+                }
+            }
+        }
+
+        if (characters.isNotEmpty()) {
+            sb.append("-----------------------------------------------------------------\n")
+            sb.append("                   CASTING & BIBLE DE CONTINUITÉ\n")
+            sb.append("-----------------------------------------------------------------\n")
+            characters.forEach { (role, anchor) ->
+                sb.append("• [${role.uppercase()}] :\n  $anchor\n\n")
+            }
+        }
+
+        sb.append("=================================================================\n")
+        sb.append("                   DÉCOUPAGE TECHNIQUE & SÉQUENCIER\n")
+        sb.append("=================================================================\n\n")
+
+        scenes.forEach { sc ->
+            val act = sc.narrativePhase.ifBlank { "DÉROULEMENT" }.uppercase()
+            val camera = sc.camera_movement.ifBlank { "PLAN FIXE" }.uppercase()
+            val title = sc.title.ifBlank { "PLAN ${sc.number}" }.uppercase()
+
+            sb.append("PLAN ${sc.number} - $title [$act]\n")
+            sb.append("CADRAGE & CAMÉRA : $camera\n\n")
+            sb.append("ACTION :\n${sc.description}\n\n")
+
+            if (sc.dialogue.isNotBlank()) {
+                val cleanDiag = sc.dialogue.trim().removePrefix("«").removeSuffix("»").trim()
+                val speaker = if (sc.charactersPresent.isNotBlank() && !sc.charactersPresent.contains("Décor", ignoreCase = true)) {
+                    sc.charactersPresent.uppercase()
+                } else {
+                    "PERSONNAGE"
+                }
+                sb.append("                   $speaker\n")
+                sb.append("          \"$cleanDiag\"\n\n")
+            }
+
+            if (sc.soundDesign.isNotBlank()) {
+                sb.append("SOUND DESIGN & AMBIANCE :\n[${sc.soundDesign}]\n\n")
+            }
+
+            sb.append("-----------------------------------------------------------------\n\n")
+        }
+
+        sb.append("                               FIN\n")
+        sb.append("=================================================================\n")
+        return sb.toString()
+    }
+
+    /**
+     * Sauvegarde le script en fichier .txt dans le dossier documents de l'application
+     */
+    fun saveScriptToFile(context: Context, film: com.example.data.model.FilmEntity): File? {
+        return try {
+            val text = generateHollywoodScreenplay(film)
+            val cleanTitle = film.title.replace(Regex("[^a-zA-Z0-9_-]"), "_").take(24)
+            val exportDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir, "StudioScripts")
+            if (!exportDir.exists()) exportDir.mkdirs()
+            val scriptFile = File(exportDir, "${cleanTitle}_Scenario_Studio.txt")
+            scriptFile.writeText(text)
+            Toast.makeText(context, "Scénario enregistré : ${scriptFile.name}", Toast.LENGTH_SHORT).show()
+            scriptFile
+        } catch (e: Exception) {
+            Toast.makeText(context, "Erreur de sauvegarde: ${e.message}", Toast.LENGTH_SHORT).show()
+            null
+        }
+    }
 }

@@ -901,4 +901,138 @@ class AgnesRepository(
 
         return "$charPrefix$baseAction$audioDirective, $humanRealism"
     }
+
+    /**
+     * Re-tourne une scène isolée d'un film sans avoir à régénérer tout le projet (Axe 2).
+     */
+    suspend fun reshootScene(
+        filmId: String,
+        sceneNumber: Int,
+        updatedAction: String? = null,
+        updatedDialogue: String? = null,
+        updatedCamera: String? = null,
+        stopRequested: () -> Boolean = { false },
+        onSceneUpdate: ((List<SceneItem>, progressPct: Int, stepText: String) -> Unit)? = null
+    ): SceneItem = withContext(Dispatchers.IO) {
+        val film = filmDao.getFilmByIdDirect(filmId) ?: throw IllegalArgumentException("Film non trouvé")
+        val settings = settingsDao.getSettingsDirect() ?: SettingsEntity()
+        val sceneItems = SceneItem.parseList(film.scenesJson).toMutableList()
+        val index = sceneItems.indexOfFirst { it.number == sceneNumber }
+        if (index == -1) throw IllegalArgumentException("Scène $sceneNumber introuvable")
+
+        var sc = sceneItems[index]
+        if (!updatedAction.isNullOrBlank()) {
+            sc = sc.copy(description = updatedAction, video_prompt = updatedAction)
+        }
+        if (updatedDialogue != null) {
+            sc = sc.copy(dialogue = updatedDialogue)
+        }
+        if (!updatedCamera.isNullOrBlank()) {
+            sc = sc.copy(camera_movement = updatedCamera)
+        }
+
+        sceneItems[index] = sc.copy(status = "processing", progressText = "Re-tournage en cours...")
+        onSceneUpdate?.invoke(sceneItems, 10, "Reshoot scène $sceneNumber en cours...")
+
+        val previousKeyframe = if (index > 0) sceneItems[index - 1].keyframe.orEmpty() else film.startImage
+        val startUrl = if (index == 0 && film.startImage.isNotBlank()) film.startImage else (sc.keyframe ?: previousKeyframe)
+        val endUrl = sc.keyframe ?: startUrl
+
+        val cleanPrompt = buildCleanVideoPrompt(sc, film.filmStyle, "fr")
+
+        val videoInit = apiClient.initiateVideo(
+            apiKey = settings.apiKey,
+            profile = settings.rateLimitProfile,
+            prompt = cleanPrompt,
+            startImageUrl = startUrl,
+            endImageUrl = endUrl,
+            durationSeconds = 4,
+            numFrames = 64,
+            resolution = "720p 9:16",
+            model = "agnes-video-v2.0",
+            stopRequested = stopRequested
+        )
+
+        if (videoInit !is ApiResponse.Success) {
+            val err = if (videoInit is ApiResponse.Error) videoInit.message else "Échec reshoot vidéo"
+            sceneItems[index] = sc.copy(status = "failed", error = err)
+            filmDao.update(film.copy(scenesJson = SceneItem.serializeList(sceneItems)))
+            throw IllegalStateException("Erreur reshoot: $err")
+        }
+
+        val videoId = videoInit.data.videoId
+        val pollRes = apiClient.pollVideo(
+            apiKey = settings.apiKey,
+            videoId = videoId,
+            durationSeconds = 4,
+            stopRequested = stopRequested
+        ) { prog, _, isStalled ->
+            sceneItems[index] = sc.copy(
+                status = if (isStalled) "stalled" else "processing",
+                progressText = if (isStalled) "Attente serveur..." else "Rendu: $prog%"
+            )
+            onSceneUpdate?.invoke(sceneItems, 20 + (prog * 75 / 100), "Scène $sceneNumber : $prog%")
+        }
+
+        if (pollRes !is ApiResponse.Success || pollRes.data.url.isNullOrBlank()) {
+            val err = if (pollRes is ApiResponse.Error) pollRes.message else "Erreur rendu"
+            sceneItems[index] = sc.copy(status = "failed", error = err)
+            filmDao.update(film.copy(scenesJson = SceneItem.serializeList(sceneItems)))
+            throw IllegalStateException("Échec rendu: $err")
+        }
+
+        val finalUrl = pollRes.data.url
+        val cached = if (context != null && !finalUrl.isNullOrBlank()) {
+            OfflineVideoManager.cacheVideo(context, finalUrl)
+        } else null
+        val resolvedUrl = cached ?: finalUrl
+
+        val finalScene = sc.copy(status = "done", videoUrl = resolvedUrl, progressText = "Scène re-tournée avec succès")
+        sceneItems[index] = finalScene
+        filmDao.update(film.copy(scenesJson = SceneItem.serializeList(sceneItems)))
+        onSceneUpdate?.invoke(sceneItems, 100, "Scène $sceneNumber prête !")
+        return@withContext finalScene
+    }
+
+    /**
+     * Génère un portrait test pour la fiche casting (Lookbook - Axe 3).
+     */
+    suspend fun generateCastingPortrait(
+        characterBible: String,
+        filmStyle: String
+    ): String? = withContext(Dispatchers.IO) {
+        val settings = settingsDao.getSettingsDirect() ?: SettingsEntity()
+        val cleanKey = settings.apiKey.trim()
+        if (cleanKey.isBlank() || characterBible.isBlank()) return@withContext null
+
+        val prompt = "[CASTING LOOKBOOK CHARACTER PORTRAIT]: $characterBible, style $filmStyle, photorealistic studio headshot, natural lighting, highly detailed face and expression, 1:1 square format, cinematic texture"
+        val res = apiClient.generateImage(
+            apiKey = cleanKey,
+            prompt = prompt,
+            style = filmStyle,
+            size = "2K",
+            ratio = "1:1",
+            variations = 1,
+            model = "agnes-image-2.1-flash"
+        )
+        if (res is ApiResponse.Success) {
+            res.data.urls.firstOrNull()
+        } else null
+    }
+
+    /**
+     * Réinitialise les plans d'un film pour relancer une production complète propre (Axe 1/2)
+     */
+    suspend fun resetAndRestartFilm(filmId: String): FilmEntity? = withContext(Dispatchers.IO) {
+        val film = filmDao.getFilmByIdDirect(filmId) ?: return@withContext null
+        val scs = SceneItem.parseList(film.scenesJson)
+        val resetScenes = scs.map { it.copy(status = "pending", keyframe = null, videoUrl = null, error = null, progressText = "") }
+        val updated = film.copy(
+            status = "processing",
+            failureReason = null,
+            scenesJson = SceneItem.serializeList(resetScenes)
+        )
+        filmDao.update(updated)
+        updated
+    }
 }

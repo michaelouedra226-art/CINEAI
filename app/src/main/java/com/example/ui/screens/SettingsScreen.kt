@@ -26,6 +26,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,6 +46,7 @@ import com.example.ui.components.AgnesShimmerProgressBar
 import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
+import com.example.util.OfflineVideoManager
 
 @Composable
 fun SettingsScreen(
@@ -318,6 +320,61 @@ fun SettingsScreen(
                     },
                     colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF8B5CF6))
                 )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // Gestion du stockage local (Rushs vidéo) - Axe 5
+        Text(text = "Gestion du stockage local (Rushs vidéo)", color = Color(0xFFA1A1AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        var cacheSizeBytes by remember { mutableLongStateOf(OfflineVideoManager.getCacheSizeBytes(context)) }
+        var isClearingCache by remember { mutableStateOf(false) }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF13131A))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "Espace utilisé par les vidéos", color = Color.White, fontSize = 13.sp)
+                    val mb = cacheSizeBytes.toDouble() / (1024.0 * 1024.0)
+                    Text(
+                        text = "%.1f Mo enregistrés (seuil LRU 500 Mo)".format(mb),
+                        color = Color(0xFF9CA3AF),
+                        fontSize = 11.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isClearingCache) Color(0xFF2A2A38) else Color(0xFF7C3AED))
+                        .clickable(enabled = !isClearingCache) {
+                            isClearingCache = true
+                            triggerHapticFeedback(context)
+                            OfflineVideoManager.clearCache(context)
+                            cacheSizeBytes = OfflineVideoManager.getCacheSizeBytes(context)
+                            isClearingCache = false
+                        }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = if (isClearingCache) "Nettoyage..." else "Vider le cache",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 

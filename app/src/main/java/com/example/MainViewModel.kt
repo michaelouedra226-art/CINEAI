@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.api.ApiClient
@@ -19,6 +20,8 @@ import com.example.data.model.UsageEntity
 import com.example.data.repository.AgnesRepository
 import com.example.ui.components.AgnesScreen
 import com.example.ui.screens.ChatMessage
+import com.example.util.OfflineVideoManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +32,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -424,6 +429,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun restartFilm(filmId: String) {
+        if (_isFilmGenerating.value) return
+        val currentKey = settings.value.apiKey
+        if (currentKey.isBlank()) {
+            _toastMessage.value = "Veuillez configurer votre clé API dans les Réglages."
+            navigateTo(AgnesScreen.SETTINGS)
+            return
+        }
+
+        viewModelScope.launch {
+            _toastMessage.value = "Réinitialisation et re-lancement de la production..."
+            repository.resetAndRestartFilm(filmId)
+            resumeFilm(filmId)
+        }
+    }
+
     fun toggleFilmFavorite(filmId: String, favorite: Boolean) {
         viewModelScope.launch {
             repository.updateFilmFavorite(filmId, favorite)
@@ -473,5 +494,131 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendPromptToVideos(prompt: String) {
         navigateTo(AgnesScreen.VIDEOS)
+    }
+
+    // ─── AXE 2 : RESHOOT D'UNE SCÈNE ISOLÉE ───
+    private val _isReshootingScene = MutableStateFlow(false)
+    val isReshootingScene: StateFlow<Boolean> = _isReshootingScene.asStateFlow()
+
+    private val _reshootingSceneNumber = MutableStateFlow<Int?>(null)
+    val reshootingSceneNumber: StateFlow<Int?> = _reshootingSceneNumber.asStateFlow()
+
+    fun reshootScene(
+        filmId: String,
+        sceneNumber: Int,
+        updatedAction: String? = null,
+        updatedDialogue: String? = null,
+        updatedCamera: String? = null,
+        onDone: ((Boolean) -> Unit)? = null
+    ) {
+        val currentKey = settings.value.apiKey
+        if (currentKey.isBlank()) {
+            _toastMessage.value = "Veuillez configurer votre clé API dans les Réglages."
+            onDone?.invoke(false)
+            return
+        }
+        _isReshootingScene.value = true
+        _reshootingSceneNumber.value = sceneNumber
+        _toastMessage.value = "Re-tournage de la scène $sceneNumber démarré..."
+
+        viewModelScope.launch {
+            try {
+                repository.reshootScene(
+                    filmId = filmId,
+                    sceneNumber = sceneNumber,
+                    updatedAction = updatedAction,
+                    updatedDialogue = updatedDialogue,
+                    updatedCamera = updatedCamera,
+                    onSceneUpdate = { scenes, _, stepText ->
+                        _currentFilmScenes.value = scenes
+                        _filmStepText.value = stepText
+                    }
+                )
+                _toastMessage.value = "Scène $sceneNumber re-tournée avec succès !"
+                onDone?.invoke(true)
+            } catch (e: Exception) {
+                _toastMessage.value = "Échec du reshoot: ${e.message}"
+                onDone?.invoke(false)
+            } finally {
+                _isReshootingScene.value = false
+                _reshootingSceneNumber.value = null
+            }
+        }
+    }
+
+    // ─── AXE 3 : CASTING & LOOKBOOK PORTRAITS ───
+    fun generateCastingPortrait(
+        characterBible: String,
+        filmStyle: String,
+        onResult: (String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val url = repository.generateCastingPortrait(characterBible, filmStyle)
+                onResult(url)
+            } catch (e: Exception) {
+                onResult(null)
+            }
+        }
+    }
+
+    // ─── AXE 1 : EXPORT MP4 STITCHING DU FILM COMPLET ───
+    private val _isStitchingFilm = MutableStateFlow(false)
+    val isStitchingFilm: StateFlow<Boolean> = _isStitchingFilm.asStateFlow()
+
+    private val _stitchProgress = MutableStateFlow(0)
+    val stitchProgress: StateFlow<Int> = _stitchProgress.asStateFlow()
+
+    fun stitchAndExportFilm(
+        context: Context,
+        film: FilmEntity,
+        onComplete: (File?) -> Unit
+    ) {
+        val scenes = SceneItem.parseList(film.scenesJson)
+        val videoUrls = scenes.mapNotNull { it.videoUrl }.filter { it.isNotBlank() }
+        if (videoUrls.isEmpty()) {
+            _toastMessage.value = "Aucun plan vidéo terminé à assembler."
+            onComplete(null)
+            return
+        }
+
+        _isStitchingFilm.value = true
+        _stitchProgress.value = 5
+        _toastMessage.value = "Assemblage du film complet en cours..."
+
+        viewModelScope.launch {
+            try {
+                val resultFile = OfflineVideoManager.stitchFilmScenes(
+                    context = context,
+                    filmTitle = film.title,
+                    sceneVideoUrls = videoUrls,
+                    onProgress = { pct -> _stitchProgress.value = pct }
+                )
+                if (resultFile != null && resultFile.exists()) {
+                    _toastMessage.value = "Film MP4 unifié prêt : ${resultFile.name}"
+                    onComplete(resultFile)
+                } else {
+                    _toastMessage.value = "Échec de l'assemblage vidéo"
+                    onComplete(null)
+                }
+            } catch (e: Exception) {
+                _toastMessage.value = "Erreur: ${e.message}"
+                onComplete(null)
+            } finally {
+                _isStitchingFilm.value = false
+                _stitchProgress.value = 0
+            }
+        }
+    }
+
+    // ─── AXE 5 : GESTION DU STOCKAGE LRU ───
+    fun cleanVideoCache(context: Context, onResult: (Long) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val freed = OfflineVideoManager.clearCache(context)
+            withContext(Dispatchers.Main) {
+                _toastMessage.value = "Cache nettoyé : ${(freed / (1024 * 1024))} Mo libérés"
+                onResult(freed)
+            }
+        }
     }
 }

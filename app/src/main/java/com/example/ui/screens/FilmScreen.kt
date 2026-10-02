@@ -76,6 +76,7 @@ import com.example.ui.components.MediaViewerModal
 import com.example.ui.components.triggerHapticFeedback
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
+import com.example.util.DownloadHelper
 import com.example.util.ImagePickerHelper
 import kotlinx.coroutines.launch
 
@@ -109,6 +110,9 @@ fun FilmScreen(
     onPrepareDrafts: ((prompt: String, style: String, numScenes: Int, dialogueLanguage: String, audioPresence: String, (String, List<SceneItem>) -> Unit) -> Unit)? = null,
     onSelectFilm: ((FilmEntity) -> Unit)? = null,
     onResumeFilm: ((String) -> Unit)? = null,
+    onReshootScene: ((filmId: String, sceneNumber: Int, action: String?, dialogue: String?, camera: String?) -> Unit)? = null,
+    onExportStitchedFilm: ((FilmEntity) -> Unit)? = null,
+    onGenerateCastingPortrait: ((characterBible: String, filmStyle: String, (String?) -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -124,6 +128,9 @@ fun FilmScreen(
     var filmTitle by remember { mutableStateOf("") }
     var selectedLanguage by remember { mutableStateOf("fr") }
     var selectedAudioPresence by remember { mutableStateOf("dialogue") }
+    var selectedSoundtrack by remember { mutableStateOf("orchestral") }
+    var showDraftCastingModal by remember { mutableStateOf(false) }
+    var showDraftScriptModal by remember { mutableStateOf(false) }
     var filmPrompt by remember { mutableStateOf("") }
     var hasStartImage by remember { mutableStateOf(false) }
     var startImageUrl by remember { mutableStateOf("") }
@@ -207,20 +214,32 @@ fun FilmScreen(
     if (selectedSceneForPreview != null) {
         val sc = selectedSceneForPreview!!
         val isVideo = !sc.videoUrl.isNullOrBlank()
-        val creationObj = CreationEntity(
-            id = "scene_${sc.number}",
-            type = if (isVideo) "video" else "image",
-            prompt = sc.video_prompt.ifBlank { sc.image_prompt },
-            model = if (isVideo) "agnes-video-v2.0" else "agnes-image-2.1-flash",
-            resultUrl = if (isVideo) sc.videoUrl else sc.keyframe,
-            thumbnail = sc.keyframe,
-            status = sc.status
-        )
-        MediaViewerModal(
-            creation = creationObj,
-            film = null,
-            onDismiss = { selectedSceneForPreview = null }
-        )
+        if (currentFilm != null) {
+            MediaViewerModal(
+                creation = null,
+                film = currentFilm,
+                onDismiss = { selectedSceneForPreview = null },
+                onResumeFilm = onResumeFilm,
+                onReshootScene = onReshootScene,
+                onExportStitchedFilm = onExportStitchedFilm,
+                onGenerateCastingPortrait = onGenerateCastingPortrait
+            )
+        } else {
+            val creationObj = CreationEntity(
+                id = "scene_${sc.number}",
+                type = if (isVideo) "video" else "image",
+                prompt = sc.video_prompt.ifBlank { sc.image_prompt },
+                model = if (isVideo) "agnes-video-v2.0" else "agnes-image-2.1-flash",
+                resultUrl = if (isVideo) sc.videoUrl else sc.keyframe,
+                thumbnail = sc.keyframe,
+                status = sc.status
+            )
+            MediaViewerModal(
+                creation = creationObj,
+                film = null,
+                onDismiss = { selectedSceneForPreview = null }
+            )
+        }
     }
 
     if (showImagePicker) {
@@ -968,22 +987,54 @@ fun FilmScreen(
 
                                     Spacer(modifier = Modifier.height(4.dp))
 
-                                    if (hasVideo) {
-                                        Text(
-                                            text = "▶ Toucher pour visionner",
-                                            color = Color(0xFF34D399),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    } else if (hasKeyframe) {
-                                        Text(
-                                            text = if (isProc) scene.progressText.ifBlank { "Animation vidéo..." } else "🔍 Toucher pour agrandir",
-                                            color = Color(0xFFA78BFA),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (hasVideo) {
+                                            Text(
+                                                text = "▶ Toucher pour visionner",
+                                                color = Color(0xFF34D399),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        } else if (hasKeyframe) {
+                                            Text(
+                                                text = if (isProc) scene.progressText.ifBlank { "Animation vidéo..." } else "🔍 Toucher pour agrandir",
+                                                color = Color(0xFFA78BFA),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+
+                                        if (onReshootScene != null && currentFilm != null && (hasVideo || hasKeyframe || scene.status == "failed")) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(Color(0xFF2E1065))
+                                                    .border(1.dp, Color(0xFF8B5CF6), RoundedCornerShape(4.dp))
+                                                    .clickable {
+                                                        triggerHapticFeedback(context)
+                                                        onReshootScene(
+                                                            currentFilm.id,
+                                                            scene.number,
+                                                            scene.description,
+                                                            scene.dialogue,
+                                                            scene.camera_movement
+                                                        )
+                                                    }
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    AgnesSvgIcon(icon = AgnesIcon.GENERATE, tint = Color(0xFFC4B5FD), size = 10.dp)
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text("Re-tourner", color = Color.White, fontSize = 9.sp)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1251,6 +1302,54 @@ fun FilmScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Boutons Outils Studio : Casting & Scénario Hollywood (Axe 3 & 5)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF1E1B4B))
+                        .border(1.dp, Color(0xFF6366F1), RoundedCornerShape(8.dp))
+                        .clickable {
+                            triggerHapticFeedback(context)
+                            showDraftCastingModal = true
+                        }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AgnesSvgIcon(icon = AgnesIcon.HOME_IMAGES, tint = Color(0xFFA5B4FC), size = 13.dp)
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("Casting & Lookbook", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF1E293B))
+                        .border(1.dp, Color(0xFF475569), RoundedCornerShape(8.dp))
+                        .clickable {
+                            triggerHapticFeedback(context)
+                            showDraftScriptModal = true
+                        }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AgnesSvgIcon(icon = AgnesIcon.LOGS, tint = Color(0xFF94A3B8), size = 13.dp)
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("Scénario Studio", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             AgnesPrimaryButton(
                 text = "Lancer la production (${draftScenes.size} plans)",
                 onClick = {
@@ -1269,6 +1368,243 @@ fun FilmScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 icon = AgnesIcon.GENERATE
+            )
+        }
+
+        if (showDraftScriptModal && draftScenes.isNotEmpty()) {
+            val tempFilm: FilmEntity = remember(draftScenes, filmTitle, filmPrompt, selectedStyle) {
+                FilmEntity(
+                    id = "temp_draft",
+                    title = if (filmTitle.isNotBlank()) filmTitle else "Film Studio",
+                    logline = filmPrompt,
+                    prompt = filmPrompt,
+                    filmStyle = selectedStyle,
+                    duration = requestedDurationSeconds,
+                    scenesJson = SceneItem.serializeList(draftScenes),
+                    status = "draft"
+                )
+            }
+            val scriptText: String = remember(tempFilm) { DownloadHelper.generateHollywoodScreenplay(tempFilm) }
+
+            AlertDialog(
+                onDismissRequest = { showDraftScriptModal = false },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Scénario Studio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("Format Hollywoodien avant rendu", color = Color(0xFFA78BFA), fontSize = 11.sp)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF282836))
+                                .clickable { showDraftScriptModal = false },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AgnesSvgIcon(icon = AgnesIcon.CLOSE, tint = Color.White, size = 14.dp)
+                        }
+                    }
+                },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth().height(380.dp)) {
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF0F0F14),
+                            border = BorderStroke(1.dp, Color(0xFF2A2A3A))
+                        ) {
+                            Text(
+                                text = scriptText,
+                                color = Color(0xFFE2E8F0),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp,
+                                modifier = Modifier
+                                    .padding(12.dp)
+                                    .verticalScroll(rememberScrollState())
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF4C1D95))
+                                    .clickable {
+                                        triggerHapticFeedback(context)
+                                        DownloadHelper.copyTextToClipboard(context, scriptText, "Scénario")
+                                    }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Copier", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF1E1E28))
+                                    .clickable {
+                                        triggerHapticFeedback(context)
+                                        DownloadHelper.shareText(context, scriptText, tempFilm.title)
+                                    }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Partager", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF047857))
+                                    .clickable {
+                                        triggerHapticFeedback(context)
+                                        DownloadHelper.saveScriptToFile(context, tempFilm)
+                                    }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Sauver .txt", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                containerColor = Color(0xFF1E1E28),
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+
+        if (showDraftCastingModal && draftScenes.isNotEmpty()) {
+            val characterMap = remember(draftScenes) {
+                val map = mutableMapOf<String, String>()
+                draftScenes.forEach { sc ->
+                    if (sc.characterAnchor.isNotBlank()) {
+                        val label = sc.charactersPresent.ifBlank { "Protagoniste" }
+                        if (!map.containsKey(label)) {
+                            map[label] = sc.characterAnchor
+                        }
+                    }
+                }
+                if (map.isEmpty()) {
+                    map["Protagoniste"] = filmPrompt
+                }
+                map
+            }
+            var portraits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+            var loadingRole by remember { mutableStateOf<String?>(null) }
+
+            AlertDialog(
+                onDismissRequest = { showDraftCastingModal = false },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Casting & Bible de Continuité", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("Cohérence des visages et tenues", color = Color(0xFFA78BFA), fontSize = 11.sp)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF282836))
+                                .clickable { showDraftCastingModal = false },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AgnesSvgIcon(icon = AgnesIcon.CLOSE, tint = Color.White, size = 14.dp)
+                        }
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(380.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        characterMap.forEach { (role, anchor) ->
+                            val portraitUrl = portraits[role]
+                            val isLoading = loadingRole == role
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF13131A))
+                                    .border(1.dp, Color(0xFF282836), RoundedCornerShape(10.dp))
+                                    .padding(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(text = role.uppercase(), color = Color(0xFFA78BFA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    if (onGenerateCastingPortrait != null) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (isLoading) Color(0xFF3F3F46) else Color(0xFF7C3AED))
+                                            .clickable(enabled = !isLoading) {
+                                                triggerHapticFeedback(context)
+                                                loadingRole = role
+                                                onGenerateCastingPortrait(anchor, selectedStyle) { url ->
+                                                    loadingRole = null
+                                                    if (!url.isNullOrBlank()) {
+                                                        portraits = portraits + (role to url)
+                                                    }
+                                                }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isLoading) "Génération..." else if (portraitUrl != null) "Re-générer" else "Portrait Lookbook",
+                                                color = Color.White,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                if (portraitUrl != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(130.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color.Black),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        AsyncImage(
+                                            model = portraitUrl,
+                                            contentDescription = "Portrait $role",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
+                                Text(text = anchor, color = Color(0xFFCBD5E1), fontSize = 11.sp, lineHeight = 15.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                containerColor = Color(0xFF1E1E28),
+                shape = RoundedCornerShape(16.dp)
             )
         }
     } else {
@@ -1797,7 +2133,42 @@ fun FilmScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(text = "Atmosphère sonore & Mixage studio (Axe 4)", color = Color(0xFFA1A1AA), fontSize = 12.sp)
             Spacer(modifier = Modifier.height(6.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    "orchestral" to "Symphonique",
+                    "tension" to "Tension & Silence",
+                    "electronic" to "Électronique",
+                    "ambient_real" to "Réalisme brut"
+                ).forEach { (ost, ostLabel) ->
+                    val isOstSel = selectedSoundtrack == ost
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isOstSel) Color(0xFF1E3A8A) else Color(0xFF161622))
+                            .border(1.dp, if (isOstSel) Color(0xFF60A5FA) else Color(0xFF282836), RoundedCornerShape(8.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                selectedSoundtrack = ost
+                            }
+                            .padding(vertical = 7.dp, horizontal = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = ostLabel,
+                            color = if (isOstSel) Color.White else Color(0xFFA1A1AA),
+                            fontSize = 10.sp,
+                            fontWeight = if (isOstSel) FontWeight.Bold else FontWeight.Normal,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

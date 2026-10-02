@@ -6,6 +6,7 @@ import android.widget.VideoView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,11 +29,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -77,7 +82,10 @@ fun MediaViewerModal(
     onDeleteCreation: ((String) -> Unit)? = null,
     onDeleteFilm: ((String) -> Unit)? = null,
     onResumeFilm: ((String) -> Unit)? = null,
-    onRestartFilm: ((String) -> Unit)? = null
+    onRestartFilm: ((String) -> Unit)? = null,
+    onReshootScene: ((filmId: String, sceneNumber: Int, action: String?, dialogue: String?, camera: String?) -> Unit)? = null,
+    onExportStitchedFilm: ((FilmEntity) -> Unit)? = null,
+    onGenerateCastingPortrait: ((characterBible: String, filmStyle: String, (String?) -> Unit) -> Unit)? = null
 ) {
     if (creation == null && film == null) return
 
@@ -299,6 +307,9 @@ fun MediaViewerModal(
                                 onResumeFilm = onResumeFilm,
                                 onRestartFilm = onRestartFilm,
                                 onDeleteFilm = onDeleteFilm,
+                                onReshootScene = onReshootScene,
+                                onExportStitchedFilm = onExportStitchedFilm,
+                                onGenerateCastingPortrait = onGenerateCastingPortrait,
                                 onDismiss = onDismiss
                             )
                         }
@@ -468,7 +479,9 @@ fun ImageViewerWithZoom(imageUrl: String) {
 @Composable
 fun VideoPlayerComponent(
     videoUrl: String,
-    fallbackImageUrl: String? = null
+    fallbackImageUrl: String? = null,
+    isLooping: Boolean = true,
+    onComplete: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var isCachedLocally by remember(videoUrl) {
@@ -521,7 +534,7 @@ fun VideoPlayerComponent(
         contentAlignment = Alignment.Center
     ) {
         if (!hasError) {
-            androidx.compose.runtime.key(videoUrl, isCachedLocally) {
+            androidx.compose.runtime.key(videoUrl, isCachedLocally, isLooping) {
                 AndroidView(
                     factory = { ctx ->
                         VideoView(ctx).apply {
@@ -529,7 +542,7 @@ fun VideoPlayerComponent(
                             setOnPreparedListener { mp ->
                                 isBuffering = false
                                 durationMs = mp.duration
-                                mp.isLooping = true
+                                mp.isLooping = isLooping
                                 start()
                                 isPlaying = true
                             }
@@ -541,6 +554,7 @@ fun VideoPlayerComponent(
                             }
                             setOnCompletionListener {
                                 isPlaying = false
+                                onComplete?.invoke()
                             }
                             videoViewRef = this
                         }
@@ -686,6 +700,9 @@ fun FilmPlayerView(
     onResumeFilm: ((String) -> Unit)? = null,
     onRestartFilm: ((String) -> Unit)? = null,
     onDeleteFilm: ((String) -> Unit)? = null,
+    onReshootScene: ((filmId: String, sceneNumber: Int, action: String?, dialogue: String?, camera: String?) -> Unit)? = null,
+    onExportStitchedFilm: ((FilmEntity) -> Unit)? = null,
+    onGenerateCastingPortrait: ((characterBible: String, filmStyle: String, (String?) -> Unit) -> Unit)? = null,
     onDismiss: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -696,6 +713,349 @@ fun FilmPlayerView(
     var selectedSceneIndex by remember { mutableIntStateOf(0) }
     val activeScene = scenes.getOrNull(selectedSceneIndex)
     var showFullDecoupage by remember { mutableStateOf(false) }
+
+    var isContinuousMode by remember { mutableStateOf(true) }
+    var showReshootDialog by remember { mutableStateOf(false) }
+    var showScriptModal by remember { mutableStateOf(false) }
+    var showCastingModal by remember { mutableStateOf(false) }
+
+    var editReshootAction by remember(activeScene) { mutableStateOf(activeScene?.description.orEmpty()) }
+    var editReshootDiag by remember(activeScene) { mutableStateOf(activeScene?.dialogue.orEmpty()) }
+    var editReshootCam by remember(activeScene) { mutableStateOf(activeScene?.camera_movement.orEmpty()) }
+
+    // Dialog Scénario Studio Standard Hollywood (Axe 5)
+    if (showScriptModal) {
+        val scriptText = remember(film) { DownloadHelper.generateHollywoodScreenplay(film) }
+        AlertDialog(
+            onDismissRequest = { showScriptModal = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Scénario Professionnel", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("Format Studio & Découpage Hollywoodien", color = Color(0xFFA78BFA), fontSize = 11.sp)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF282836))
+                            .clickable { showScriptModal = false },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AgnesSvgIcon(icon = AgnesIcon.CLOSE, tint = Color.White, size = 14.dp)
+                    }
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().height(400.dp)) {
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF0F0F14),
+                        border = BorderStroke(1.dp, Color(0xFF2A2A3A))
+                    ) {
+                        Text(
+                            text = scriptText,
+                            color = Color(0xFFE2E8F0),
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF4C1D95))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    DownloadHelper.copyTextToClipboard(context, scriptText, "Scénario")
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Copier", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF1E1E28))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    DownloadHelper.shareText(context, scriptText, film.title)
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Partager", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF047857))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    DownloadHelper.saveScriptToFile(context, film)
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Sauver .txt", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            containerColor = Color(0xFF1E1E28),
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    // Dialog Casting & Bible de Continuité Visuelle (Axe 3)
+    if (showCastingModal) {
+        val characterMap = remember(scenes) {
+            val map = mutableMapOf<String, String>()
+            scenes.forEach { sc ->
+                if (sc.characterAnchor.isNotBlank()) {
+                    val label = sc.charactersPresent.ifBlank { "Protagoniste" }
+                    if (!map.containsKey(label)) {
+                        map[label] = sc.characterAnchor
+                    }
+                }
+            }
+            if (map.isEmpty()) {
+                map["Protagoniste"] = film.prompt
+            }
+            map
+        }
+        var portraits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+        var loadingCharacter by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showCastingModal = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Casting & Bible de Continuité", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("Cohérence des visages et tenues", color = Color(0xFFA78BFA), fontSize = 11.sp)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF282836))
+                            .clickable { showCastingModal = false },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AgnesSvgIcon(icon = AgnesIcon.CLOSE, tint = Color.White, size = 14.dp)
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(400.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    characterMap.forEach { (role, anchor) ->
+                        val portraitUrl = portraits[role]
+                        val isLoadingThis = loadingCharacter == role
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF13131A))
+                                .border(1.dp, Color(0xFF282836), RoundedCornerShape(10.dp))
+                                .padding(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = role.uppercase(),
+                                    color = Color(0xFFA78BFA),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                if (onGenerateCastingPortrait != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (isLoadingThis) Color(0xFF3F3F46) else Color(0xFF7C3AED))
+                                            .clickable(enabled = !isLoadingThis) {
+                                                triggerHapticFeedback(context)
+                                                loadingCharacter = role
+                                                onGenerateCastingPortrait(anchor, film.filmStyle) { url ->
+                                                    loadingCharacter = null
+                                                    if (!url.isNullOrBlank()) {
+                                                        portraits = portraits + (role to url)
+                                                    }
+                                                }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isLoadingThis) "Génération..." else if (portraitUrl != null) "Re-générer" else "Portrait Lookbook",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            if (portraitUrl != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(130.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.Black),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AsyncImage(
+                                        model = portraitUrl,
+                                        contentDescription = "Portrait $role",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                            }
+
+                            Text(
+                                text = anchor,
+                                color = Color(0xFFCBD5E1),
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            containerColor = Color(0xFF1E1E28),
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    if (showReshootDialog && activeScene != null) {
+        AlertDialog(
+            onDismissRequest = { showReshootDialog = false },
+            title = {
+                Text(
+                    text = "Re-tourner le plan ${activeScene.number}",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Ajustez la mise en scène, le dialogue ou la caméra pour relancer ce plan isolé :",
+                        color = Color(0xFFA1A1AA),
+                        fontSize = 12.sp
+                    )
+
+                    Text("Description de l'action :", color = Color(0xFFC4B5FD), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        value = editReshootAction,
+                        onValueChange = { editReshootAction = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFF13131A),
+                            unfocusedContainerColor = Color(0xFF13131A),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+
+                    Text("Dialogue parlé :", color = Color(0xFFC4B5FD), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        value = editReshootDiag,
+                        onValueChange = { editReshootDiag = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFF13131A),
+                            unfocusedContainerColor = Color(0xFF13131A),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+
+                    Text("Cadrage / Mouvement de caméra :", color = Color(0xFFC4B5FD), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        value = editReshootCam,
+                        onValueChange = { editReshootCam = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFF13131A),
+                            unfocusedContainerColor = Color(0xFF13131A),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showReshootDialog = false
+                        onReshootScene?.invoke(
+                            film.id,
+                            activeScene.number,
+                            editReshootAction,
+                            editReshootDiag,
+                            editReshootCam
+                        )
+                    }
+                ) {
+                    Text("Lancer le Reshoot", color = Color(0xFFA78BFA), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReshootDialog = false }) {
+                    Text("Annuler", color = Color(0xFFA1A1AA))
+                }
+            },
+            containerColor = Color(0xFF1E1E28),
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Alerte si film interrompu / partiel
@@ -771,16 +1131,95 @@ fun FilmPlayerView(
             val videoUrl = activeScene?.videoUrl
             val keyframeUrl = activeScene?.keyframe
 
-            androidx.compose.runtime.key(selectedSceneIndex, videoUrl, keyframeUrl) {
+            androidx.compose.runtime.key(selectedSceneIndex, videoUrl, keyframeUrl, isContinuousMode) {
                 if (!videoUrl.isNullOrBlank()) {
                     VideoPlayerComponent(
                         videoUrl = videoUrl,
-                        fallbackImageUrl = keyframeUrl
+                        fallbackImageUrl = keyframeUrl,
+                        isLooping = !isContinuousMode,
+                        onComplete = {
+                            if (isContinuousMode && scenes.isNotEmpty()) {
+                                if (selectedSceneIndex < scenes.size - 1) {
+                                    selectedSceneIndex++
+                                } else {
+                                    selectedSceneIndex = 0
+                                }
+                            }
+                        }
                     )
                 } else if (!keyframeUrl.isNullOrBlank()) {
                     ImageViewerWithZoom(imageUrl = keyframeUrl)
                 } else {
                     EmptyMediaState(message = "Plan ${activeScene?.number ?: (selectedSceneIndex + 1)} en cours de production...")
+                }
+            }
+
+            // Badge indicateur Mode Continu en haut à gauche
+            if (isContinuousMode && scenes.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xDD111827),
+                    border = BorderStroke(1.dp, Color(0xFF8B5CF6))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF34D399))
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "LECTURE ENCHAÎNÉE • PLAN ${selectedSceneIndex + 1}/${scenes.size}",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // Boutons de saut Plan précédent / suivant directement sur l'écran
+            if (selectedSceneIndex > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 12.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x99000000))
+                        .border(1.dp, Color(0x55FFFFFF), CircleShape)
+                        .clickable {
+                            triggerHapticFeedback(context)
+                            selectedSceneIndex--
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("‹", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            if (selectedSceneIndex < scenes.size - 1) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 12.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x99000000))
+                        .border(1.dp, Color(0x55FFFFFF), CircleShape)
+                        .clickable {
+                            triggerHapticFeedback(context)
+                            selectedSceneIndex++
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("›", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -801,12 +1240,26 @@ fun FilmPlayerView(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Plans (${scenes.size} scènes)",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    // Toggle Mode Continu / Plan par plan (Axe 1)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isContinuousMode) Color(0xFF4C1D95) else Color(0xFF1E1E28))
+                            .border(1.dp, if (isContinuousMode) Color(0xFFA78BFA) else Color(0xFF3F3F46), RoundedCornerShape(6.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                isContinuousMode = !isContinuousMode
+                            }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (isContinuousMode) "▶ Film continu" else "⏸ Plan par plan",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
                     Text(
                         text = if (showFullDecoupage) "Masquer découpage" else "Voir découpage",
                         color = Color(0xFFA78BFA),
@@ -816,25 +1269,110 @@ fun FilmPlayerView(
                     )
                 }
 
-                if (activeScene?.videoUrl != null) {
-                    Row(
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Bouton Scénario Studio (Axe 5)
+                    Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF7C3AED))
+                            .background(Color(0xFF1E293B))
+                            .border(1.dp, Color(0xFF475569), RoundedCornerShape(6.dp))
                             .clickable {
                                 triggerHapticFeedback(context)
-                                DownloadHelper.downloadVideo(
-                                    context,
-                                    activeScene.videoUrl,
-                                    activeScene.title
-                                )
+                                showScriptModal = true
                             }
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            .padding(horizontal = 7.dp, vertical = 4.dp)
                     ) {
-                        AgnesSvgIcon(icon = AgnesIcon.DOWNLOAD, tint = Color.White, size = 14.dp)
-                        Text(text = "Plan ${activeScene.number}", color = Color.White, fontSize = 11.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AgnesSvgIcon(icon = AgnesIcon.LOGS, tint = Color(0xFF94A3B8), size = 11.dp)
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Script", color = Color.White, fontSize = 11.sp)
+                        }
+                    }
+
+                    // Bouton Casting & Lookbook (Axe 3)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF1E1B4B))
+                            .border(1.dp, Color(0xFF6366F1), RoundedCornerShape(6.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                showCastingModal = true
+                            }
+                            .padding(horizontal = 7.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AgnesSvgIcon(icon = AgnesIcon.HOME_IMAGES, tint = Color(0xFFA5B4FC), size = 11.dp)
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Casting", color = Color.White, fontSize = 11.sp)
+                        }
+                    }
+
+                    // Bouton Re-tourner la scène (Axe 2)
+                    if (activeScene != null && onReshootScene != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF2E1065))
+                                .border(1.dp, Color(0xFF8B5CF6), RoundedCornerShape(6.dp))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    editReshootAction = activeScene.description
+                                    editReshootDiag = activeScene.dialogue
+                                    editReshootCam = activeScene.camera_movement
+                                    showReshootDialog = true
+                                }
+                                .padding(horizontal = 7.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                AgnesSvgIcon(icon = AgnesIcon.GENERATE, tint = Color(0xFFC4B5FD), size = 11.dp)
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("Re-tourner", color = Color.White, fontSize = 11.sp)
+                            }
+                        }
+                    }
+
+                    // Bouton Exporter Film Complet Stitched (Axe 1)
+                    if (onExportStitchedFilm != null && scenes.any { !it.videoUrl.isNullOrBlank() }) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF047857))
+                                .border(1.dp, Color(0xFF10B981), RoundedCornerShape(6.dp))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                onExportStitchedFilm(film)
+                            }
+                            .padding(horizontal = 7.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                AgnesSvgIcon(icon = AgnesIcon.FILM, tint = Color.White, size = 11.dp)
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("Film MP4", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    if (activeScene?.videoUrl != null) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF7C3AED))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    DownloadHelper.downloadVideo(
+                                        context,
+                                        activeScene.videoUrl,
+                                        activeScene.title
+                                    )
+                                }
+                                .padding(horizontal = 7.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            AgnesSvgIcon(icon = AgnesIcon.DOWNLOAD, tint = Color.White, size = 11.dp)
+                            Text(text = "P${activeScene.number}", color = Color.White, fontSize = 11.sp)
+                        }
                     }
                 }
             }
