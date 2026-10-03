@@ -61,7 +61,8 @@ enum class AgnesIcon {
     LOGS,
     PLAY,
     PAUSE,
-    SHARE
+    SHARE,
+    AUDIO
 }
 
 @Composable
@@ -129,6 +130,7 @@ fun AgnesSvgIcon(
                 AgnesIcon.PLAY -> drawPlay(tint, stroke)
                 AgnesIcon.PAUSE -> drawPause(tint, stroke)
                 AgnesIcon.SHARE -> drawShare(tint, stroke)
+                AgnesIcon.AUDIO -> drawAudio(tint, stroke)
             }
         }
     }
@@ -531,5 +533,35 @@ private fun DrawScope.drawShare(color: Color, stroke: Stroke) {
     drawCircle(color, radius = r, center = p1, style = stroke)
     drawCircle(color, radius = r, center = p2, style = stroke)
     drawCircle(color, radius = r, center = p3, style = stroke)
+}
+
+private fun DrawScope.drawAudio(color: Color, stroke: Stroke) {
+    val w = size.width
+    val h = size.height
+    // Speaker cone: base rect + polygon cone + sound waves
+    val speaker = Path().apply {
+        moveTo(w * 0.22f, h * 0.40f)
+        lineTo(w * 0.36f, h * 0.40f)
+        lineTo(w * 0.54f, h * 0.24f)
+        lineTo(w * 0.54f, h * 0.76f)
+        lineTo(w * 0.36f, h * 0.60f)
+        lineTo(w * 0.22f, h * 0.60f)
+        close()
+    }
+    drawPath(speaker, color, style = stroke)
+
+    // Wave 1
+    val wave1 = Path().apply {
+        moveTo(w * 0.66f, h * 0.38f)
+        quadraticTo(w * 0.74f, h * 0.50f, w * 0.66f, h * 0.62f)
+    }
+    drawPath(wave1, color, style = stroke)
+
+    // Wave 2
+    val wave2 = Path().apply {
+        moveTo(w * 0.76f, h * 0.28f)
+        quadraticTo(w * 0.88f, h * 0.50f, w * 0.76f, h * 0.72f)
+    }
+    drawPath(wave2, color, style = stroke)
 }
 

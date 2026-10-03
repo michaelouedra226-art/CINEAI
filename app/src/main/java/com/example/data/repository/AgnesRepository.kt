@@ -510,15 +510,13 @@ class AgnesRepository(
 
             val sc = sceneItems[i]
             val pct = 20 + ((i + 1) * 20 / numScenes)
-            onSceneUpdate?.invoke(sceneItems, pct, "Phase 2 : Génération Keyframe ${i + 1}/$numScenes (continuité personnage)...")
+            onSceneUpdate?.invoke(sceneItems, pct, "Phase 2 : Génération Keyframe ${i + 1}/$numScenes (${sc.charactersPresent})...")
 
-            val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.image_prompt.contains(sc.characterAnchor)) {
-                "[MASTER CONTINUITY: ${sc.characterAnchor}, identical facial features and clothing], "
-            } else ""
-            val keyframePrompt = if (sc.image_prompt.contains("35mm", ignoreCase = true)) {
-                "$charPrefix${sc.image_prompt}, style $filmStyle, 9:16 vertical format"
+            val rawPrompt = sc.image_prompt.ifBlank { sc.description }.trim()
+            val keyframePrompt = if (rawPrompt.contains("9:16", ignoreCase = true)) {
+                rawPrompt
             } else {
-                "$charPrefix${sc.image_prompt}, shot on 35mm film, natural realistic lighting, authentic human texture and skin tones, style $filmStyle, 9:16 vertical format"
+                "$rawPrompt, 9:16 vertical format"
             }
             val imgRes = apiClient.generateImage(
                 apiKey = settings.apiKey,
@@ -734,10 +732,12 @@ class AgnesRepository(
                 val pct = 20 + ((i + 1) * 20 / numScenes)
                 onSceneUpdate?.invoke(sceneItems, pct, "Keyframe ${i + 1}/$numScenes (continuité personnage)...")
 
-                val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.image_prompt.contains(sc.characterAnchor)) {
-                    "[MASTER CONTINUITY: ${sc.characterAnchor}, identical face structure and signature outfit], "
-                } else ""
-                val keyframePrompt = "$charPrefix${sc.image_prompt}, master studio keyframe, style ${film.filmStyle}, 35mm anamorphic lens, volumetric lighting, 9:16 vertical cinema, 8k"
+                val rawPrompt = sc.image_prompt.ifBlank { sc.description }.trim()
+                val keyframePrompt = if (rawPrompt.contains("9:16", ignoreCase = true)) {
+                    rawPrompt
+                } else {
+                    "$rawPrompt, 9:16 vertical format"
+                }
                 val imgRes = apiClient.generateImage(
                     apiKey = settings.apiKey,
                     prompt = keyframePrompt,
@@ -901,13 +901,17 @@ class AgnesRepository(
             }
         }
 
-        val charPrefix = if (scene.characterAnchor.isNotBlank() && !baseAction.contains(scene.characterAnchor)) {
-            "[Character: ${scene.characterAnchor}], "
-        } else ""
+        val isEnvironmentScene = scene.charactersPresent.contains("décor", ignoreCase = true) ||
+            scene.charactersPresent.contains("environnement", ignoreCase = true) ||
+            scene.video_prompt.contains("no people", ignoreCase = true)
 
-        val humanRealism = "natural human acting and body language, organic camera work, 35mm film grain, style $filmStyle, do not repeat dialogue"
+        val cinematicRealism = if (isEnvironmentScene) {
+            "epic cinematic framing, natural ambient motion, 35mm film grain, style $filmStyle"
+        } else {
+            "natural human acting and body language, organic camera work, 35mm film grain, style $filmStyle, do not repeat dialogue"
+        }
 
-        return "$charPrefix$baseAction$audioDirective, $humanRealism"
+        return "$baseAction$audioDirective, $cinematicRealism"
     }
 
     /**

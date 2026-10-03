@@ -2272,12 +2272,12 @@ fun FilmScreen(
                                     SceneItem(
                                         number = idx,
                                         title = "Plan $idx",
-                                        description = "Plan $idx du projet $filmTitle",
-                                        image_prompt = "$filmPrompt, plan $idx, style $selectedStyle",
-                                        video_prompt = "$filmPrompt, caméra travelling, plan $idx",
-                                        camera_movement = "Travelling avant",
+                                        description = "Plan $idx de la séquence $filmTitle",
+                                        image_prompt = "Cinematic shot for scene $idx, style $selectedStyle, 9:16 vertical format, 35mm film",
+                                        video_prompt = "Cinematic camera movement, scene $idx",
+                                        camera_movement = "Travelling fluide",
                                         status = "pending",
-                                        dialogue = if (selectedAudioPresence == "ambient") "" else "« Nous devons continuer sans hésiter. »",
+                                        dialogue = "",
                                         audioMode = selectedAudioPresence,
                                         soundDesign = "Nappe orchestrale cinématique et sound design immersif"
                                     )

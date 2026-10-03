@@ -41,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -68,6 +69,7 @@ import com.example.data.model.FilmEntity
 import com.example.data.model.SceneItem
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
+import com.example.util.AgnesVoiceManager
 import com.example.util.DownloadHelper
 import com.example.util.OfflineVideoManager
 import kotlinx.coroutines.delay
@@ -481,6 +483,9 @@ fun VideoPlayerComponent(
     videoUrl: String,
     fallbackImageUrl: String? = null,
     isLooping: Boolean = true,
+    dialogue: String? = null,
+    dialogueLanguage: String = "fr",
+    audioMode: String = "dialogue",
     onComplete: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -497,6 +502,8 @@ fun VideoPlayerComponent(
     var isBuffering by remember(videoUrl) { mutableStateOf(true) }
     var hasError by remember(videoUrl) { mutableStateOf(false) }
     var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
+
+    val isSpeaking by AgnesVoiceManager.isSpeaking.collectAsState()
 
     // Téléchargement automatique en arrière-plan pour garantir la disponibilité 100% hors-ligne
     LaunchedEffect(videoUrl) {
@@ -524,6 +531,7 @@ fun VideoPlayerComponent(
     DisposableEffect(videoUrl) {
         onDispose {
             videoViewRef?.stopPlayback()
+            AgnesVoiceManager.stop()
         }
     }
 
@@ -545,6 +553,9 @@ fun VideoPlayerComponent(
                                 mp.isLooping = isLooping
                                 start()
                                 isPlaying = true
+                                if (!dialogue.isNullOrBlank() && audioMode != "ambient") {
+                                    AgnesVoiceManager.speak(ctx, dialogue, dialogueLanguage)
+                                }
                             }
                             setOnErrorListener { _, _, _ ->
                                 isBuffering = false
@@ -571,6 +582,64 @@ fun VideoPlayerComponent(
                 ImageViewerWithZoom(imageUrl = fallbackImageUrl)
             } else {
                 EmptyMediaState(message = "Format vidéo non décodable sur ce périphérique")
+            }
+        }
+
+        // Bandeau Sous-titres & Voix parlée du personnage en direct
+        if (!dialogue.isNullOrBlank() && audioMode != "ambient") {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 20.dp, start = 16.dp, end = 16.dp)
+                    .fillMaxWidth(0.92f),
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xE60D0D14),
+                border = BorderStroke(1.dp, if (isSpeaking) Color(0xFFA78BFA) else Color(0x44FFFFFF))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(if (isSpeaking) Color(0xFF6D28D9) else Color(0xFF27273A))
+                            .clickable {
+                                if (isSpeaking) {
+                                    AgnesVoiceManager.stop()
+                                } else {
+                                    AgnesVoiceManager.speak(context, dialogue, dialogueLanguage)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AgnesSvgIcon(
+                            icon = AgnesIcon.AUDIO,
+                            tint = if (isSpeaking) Color.White else Color(0xFFA78BFA),
+                            size = 14.dp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        if (isSpeaking) {
+                            Text(
+                                text = "VOIX DU PERSONNAGE EN DIRECT",
+                                color = Color(0xFFA78BFA),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                        Text(
+                            text = dialogue,
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 17.sp
+                        )
+                    }
+                }
             }
         }
 
@@ -1133,10 +1202,18 @@ fun FilmPlayerView(
 
             androidx.compose.runtime.key(selectedSceneIndex, videoUrl, keyframeUrl, isContinuousMode) {
                 if (!videoUrl.isNullOrBlank()) {
+                    val sceneDiag = activeScene?.dialogue.orEmpty()
+                    val sceneAudioMode = activeScene?.audioMode ?: "dialogue"
+                    val isEnglishDiag = sceneDiag.contains("the ", ignoreCase = true) || sceneDiag.contains("you ", ignoreCase = true)
+                    val diagLang = if (isEnglishDiag) "en" else "fr"
+
                     VideoPlayerComponent(
                         videoUrl = videoUrl,
                         fallbackImageUrl = keyframeUrl,
                         isLooping = !isContinuousMode,
+                        dialogue = sceneDiag,
+                        dialogueLanguage = diagLang,
+                        audioMode = sceneAudioMode,
                         onComplete = {
                             if (isContinuousMode && scenes.isNotEmpty()) {
                                 if (selectedSceneIndex < scenes.size - 1) {
@@ -1148,7 +1225,58 @@ fun FilmPlayerView(
                         }
                     )
                 } else if (!keyframeUrl.isNullOrBlank()) {
-                    ImageViewerWithZoom(imageUrl = keyframeUrl)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        ImageViewerWithZoom(imageUrl = keyframeUrl)
+                        val sceneDiag = activeScene?.dialogue.orEmpty()
+                        val isEnglishDiag = sceneDiag.contains("the ", ignoreCase = true) || sceneDiag.contains("you ", ignoreCase = true)
+                        val diagLang = if (isEnglishDiag) "en" else "fr"
+                        if (sceneDiag.isNotBlank() && activeScene?.audioMode != "ambient") {
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 20.dp, start = 16.dp, end = 16.dp)
+                                    .fillMaxWidth(0.92f),
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xE60D0D14),
+                                border = BorderStroke(1.dp, Color(0x44FFFFFF))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val isSpeakingKeyframe by AgnesVoiceManager.isSpeaking.collectAsState()
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isSpeakingKeyframe) Color(0xFF6D28D9) else Color(0xFF27273A))
+                                            .clickable {
+                                                if (isSpeakingKeyframe) {
+                                                    AgnesVoiceManager.stop()
+                                                } else {
+                                                    AgnesVoiceManager.speak(context, sceneDiag, diagLang)
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        AgnesSvgIcon(
+                                            icon = AgnesIcon.AUDIO,
+                                            tint = if (isSpeakingKeyframe) Color.White else Color(0xFFA78BFA),
+                                            size = 14.dp
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = sceneDiag,
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        lineHeight = 17.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
                 } else {
                     EmptyMediaState(message = "Plan ${activeScene?.number ?: (selectedSceneIndex + 1)} en cours de production...")
                 }
