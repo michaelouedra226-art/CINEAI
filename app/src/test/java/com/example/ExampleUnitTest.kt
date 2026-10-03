@@ -30,10 +30,10 @@ class ExampleUnitTest {
     fun testBreakdownCalculation() {
         val breakdown = AgnesRepository.calculateBreakdown(30.0, null)
         assertTrue(breakdown.numScenes in 2..50)
-        assertEquals(121, breakdown.framesPerScene)
+        assertEquals(120, breakdown.framesPerScene)
 
         val manual = AgnesRepository.calculateBreakdown(60.0, 5)
         assertEquals(5, manual.numScenes)
-        assertTrue(manual.framesPerScene in listOf(81, 121, 153, 241, 441))
+        assertTrue(manual.framesPerScene in listOf(96, 120, 144, 192, 240, 288))
     }
 }

@@ -65,6 +65,7 @@ import coil.compose.AsyncImage
 import com.example.data.model.CreationEntity
 import com.example.data.model.FilmEntity
 import com.example.data.model.SceneItem
+import com.example.data.model.AGNES_VIDEO_MODEL
 import com.example.data.repository.AgnesRepository
 import com.example.ui.components.AgnesImagePickerModal
 import com.example.ui.components.AgnesInteractiveCard
@@ -229,7 +230,7 @@ fun FilmScreen(
                 id = "scene_${sc.number}",
                 type = if (isVideo) "video" else "image",
                 prompt = sc.video_prompt.ifBlank { sc.image_prompt },
-                model = if (isVideo) "agnes-video-v2.0" else "agnes-image-2.1-flash",
+                model = if (isVideo) AGNES_VIDEO_MODEL else "agnes-image-2.1-flash",
                 resultUrl = if (isVideo) sc.videoUrl else sc.keyframe,
                 thumbnail = sc.keyframe,
                 status = sc.status
@@ -1184,7 +1185,7 @@ fun FilmScreen(
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = "Paroles / Dialogue (Français) :", color = Color(0xFFA78BFA), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        Text(text = "Paroles / Dialogue (${if (selectedLanguage == "fr") "Français" else "English"}) :", color = Color(0xFFA78BFA), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                         OutlinedTextField(
                             value = sc.dialogue,
                             onValueChange = { newDiag ->
@@ -2179,7 +2180,7 @@ fun FilmScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "✨ Cohérence garantie : bible de personnage et style visuel réinjectés sur chaque plan. Les répliques sont générées en français avec synchronisation vocale.",
+                    text = "✨ Continuité de personnage et de style sur chaque plan. Dialogues plus développés (8–14 mots par scène) dans la langue choisie.",
                     color = Color(0xFF93C5FD),
                     fontSize = 10.sp,
                     lineHeight = 14.sp
@@ -2203,15 +2204,22 @@ fun FilmScreen(
                         .border(1.dp, Color(0xFF8B5CF6), RoundedCornerShape(6.dp))
                         .padding(horizontal = 7.dp, vertical = 2.dp)
                 ) {
-                    Text(text = "∞ Illimité", color = Color(0xFFC4B5FD), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "∞ Sans plafond local", color = Color(0xFFC4B5FD), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Collez librement un synopsis complet, un conte avec introduction de village, une bible ou un scénario détaillé. Aucune restriction de mots.",
+                text = "CINEAI ne tronque pas le texte saisi. Les très longs prompts restent soumis à la fenêtre de contexte du fournisseur Agnes.",
                 color = Color(0xFF71717A),
                 fontSize = 11.sp,
                 lineHeight = 15.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "FORMAT CINÉMA 16:9 • Plans variés : décor, action, réactions, détails et face-à-face.",
+                color = Color(0xFFA78BFA),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
@@ -2234,7 +2242,7 @@ fun FilmScreen(
             if (promptWords > 0) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "$promptWords mot(s) saisis • Prise en charge intégrale sans troncature",
+                    text = "$promptWords mot(s) saisis • aucun plafond côté CINEAI",
                     color = Color(0xFFA78BFA),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium
@@ -2277,7 +2285,7 @@ fun FilmScreen(
                                         video_prompt = "$filmPrompt, caméra travelling, plan $idx",
                                         camera_movement = "Travelling avant",
                                         status = "pending",
-                                        dialogue = if (selectedAudioPresence == "ambient") "" else "« Nous devons continuer sans hésiter. »",
+                                        dialogue = if (selectedAudioPresence == "ambient") "" else if (selectedLanguage == "fr") "« Attends, écoute le vent : quelqu'un approche derrière la porte; nous devons sortir. »" else "\"Wait, listen: someone's behind that door, and we need to leave now.\"",
                                         audioMode = selectedAudioPresence,
                                         soundDesign = "Nappe orchestrale cinématique et sound design immersif"
                                     )

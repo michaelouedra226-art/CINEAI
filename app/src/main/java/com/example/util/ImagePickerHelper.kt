@@ -40,6 +40,59 @@ object ImagePickerHelper {
         }
     }
 
+    /** Decode local paths, content URIs, and data URIs into a compact JPEG for private upload. */
+    suspend fun prepareImageBytes(context: Context, imageSource: String): ByteArray? = withContext(Dispatchers.IO) {
+        var bitmap: Bitmap? = null
+        var scaledBitmap: Bitmap? = null
+        try {
+            val source = imageSource.trim()
+            val sourceBitmap = when {
+                source.startsWith("data:", ignoreCase = true) -> {
+                    val payload = source.substringAfter(',', "")
+                    if (payload.isBlank()) null else {
+                        val bytes = Base64.decode(payload, Base64.DEFAULT)
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    }
+                }
+                source.startsWith("content://", ignoreCase = true) -> {
+                    context.contentResolver.openInputStream(Uri.parse(source))?.use { stream -> BitmapFactory.decodeStream(stream) }
+                }
+                else -> {
+                    val filePath = if (source.startsWith("file://", ignoreCase = true)) Uri.parse(source).path.orEmpty() else source
+                    val file = File(filePath)
+                    if (file.isFile) BitmapFactory.decodeFile(file.absolutePath) else null
+                }
+            } ?: return@withContext null
+            bitmap = sourceBitmap
+
+            val maxDimension = 1280
+            val minDimension = 256
+            val largest = maxOf(sourceBitmap.width, sourceBitmap.height)
+            val smallest = minOf(sourceBitmap.width, sourceBitmap.height)
+            val scaleDown = minOf(1f, maxDimension.toFloat() / largest)
+            val scaleUp = if (smallest * scaleDown < minDimension) {
+                minDimension.toFloat() / (smallest * scaleDown)
+            } else 1f
+            val scale = scaleDown * scaleUp
+            val targetWidth = (sourceBitmap.width * scale).toInt().coerceAtLeast(minDimension)
+            val targetHeight = (sourceBitmap.height * scale).toInt().coerceAtLeast(minDimension)
+            val normalizedBitmap = if (targetWidth != sourceBitmap.width || targetHeight != sourceBitmap.height) {
+                Bitmap.createScaledBitmap(sourceBitmap, targetWidth, targetHeight, true)
+            } else sourceBitmap
+            scaledBitmap = normalizedBitmap
+
+            ByteArrayOutputStream().use { output ->
+                normalizedBitmap.compress(Bitmap.CompressFormat.JPEG, 86, output)
+                output.toByteArray().takeIf { it.isNotEmpty() && it.size < 15 * 1024 * 1024 }
+            }
+        } catch (_: Exception) {
+            null
+        } finally {
+            if (scaledBitmap !== bitmap) scaledBitmap?.recycle()
+            bitmap?.recycle()
+        }
+    }
+
     /**
      * Convertit une image (URL http, chemin de fichier ou URI) en format exploitable par l'API Agnes :
      * - Si c'est une URL HTTP distante : renvoyée telle quelle.
