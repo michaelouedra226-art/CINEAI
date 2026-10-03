@@ -1,6 +1,8 @@
 package com.example
 
 import android.os.Bundle
+import android.app.Activity
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -99,8 +101,19 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
 
     val hasActiveQueue = queueItems.any { it.status in listOf("queued", "processing", "stalled") } || isFilmGenerating
 
-    BackHandler(enabled = currentScreen != AgnesScreen.IMAGES) {
-        viewModel.handleBackPress()
+    var lastBackPressAt by remember { mutableStateOf(0L) }
+    BackHandler {
+        if (viewModel.handleBackPress()) {
+            lastBackPressAt = 0L
+        } else {
+            val now = System.currentTimeMillis()
+            if (now - lastBackPressAt <= 2_000L) {
+                (context as? Activity)?.finish()
+            } else {
+                lastBackPressAt = now
+                Toast.makeText(context, "Appuyez à nouveau pour quitter CINEAI", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     Scaffold(
@@ -120,7 +133,7 @@ fun AgnesStudioApp(viewModel: MainViewModel) {
         bottomBar = {
             AgnesBottomBar(
                 currentScreen = currentScreen,
-                onScreenSelected = { viewModel.navigateTo(it) },
+                onScreenSelected = { viewModel.selectTab(it) },
                 hasGalleryNewItems = hasGalleryBadge
             )
         }

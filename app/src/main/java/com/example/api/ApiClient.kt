@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import com.example.data.model.AGNES_VIDEO_MODEL
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -62,7 +63,14 @@ data class GeneratedSceneDraft(
 )
 
 internal fun selectAgnesVideoMode(hasReferenceImage: Boolean): String =
-    if (hasReferenceImage) "keyframes" else "ti2vid"
+    if (hasReferenceImage) "keyframe" else "text"
+
+private fun agnesVideoSize(resolution: String): String = when {
+    resolution.contains("2k", ignoreCase = true) -> "2K"
+    resolution.contains("1080", ignoreCase = true) -> "1080P"
+    resolution.contains("1k", ignoreCase = true) -> "1K"
+    else -> "720P"
+}
 
 class ApiClient(
     private val rateLimiter: RateLimiter,
@@ -312,7 +320,7 @@ class ApiClient(
         durationSeconds: Int,
         numFrames: Int = 121,
         resolution: String = "720p 16:9",
-        model: String = "agnes-video-v2.0",
+        model: String = AGNES_VIDEO_MODEL,
         stopRequested: () -> Boolean = { false },
         onCooldownWait: (suspend (remainingSec: Int) -> Unit)? = null
     ): ApiResponse<VideoCreationResult> = withContext(Dispatchers.IO) {
@@ -325,12 +333,14 @@ class ApiClient(
             )
         }
 
+        val requestedVideoSeconds = durationSeconds.coerceIn(4, 12)
+
         // 1. Vérification du quota journalier 500s
         val todayDate = usageTracker.getTodayDateString()
         val currentUsage = usageTracker.getUsageForDate(todayDate)
         val currentSeconds = currentUsage?.videoSeconds ?: 0.0
 
-        if (currentSeconds + durationSeconds > RateLimiter.MAX_VIDEO_SECONDS_PER_DAY) {
+        if (currentSeconds + requestedVideoSeconds > RateLimiter.MAX_VIDEO_SECONDS_PER_DAY) {
             val msg = "Quota journalier de 500s dépassé (${String.format("%.1f", currentSeconds)}/500s consommées aujourd'hui)"
             TechnicalLogManager.log("QUOTA", msg, "ERROR")
             return@withContext ApiResponse.Error(429, msg, "quota_exceeded")
@@ -357,39 +367,28 @@ class ApiClient(
             prompt
         }
 
-        TechnicalLogManager.log("API_VID", "POST $AGNES_VIDEO_URL - Modèle: $model, Frames: $numFrames, Durée: ${durationSeconds}s")
+        TechnicalLogManager.log("API_VID", "POST $AGNES_VIDEO_URL - Modèle: $model, Durée: ${requestedVideoSeconds}s")
 
-        val hasImages = !startImageUrl.isNullOrBlank() || !endImageUrl.isNullOrBlank()
-        val extraBody = JSONObject().apply {
-            if (hasImages) {
-                put("mode", selectAgnesVideoMode(hasReferenceImage = true))
-                val imagesArray = JSONArray()
-                val start = startImageUrl?.trim().orEmpty()
-                val end = endImageUrl?.trim().orEmpty()
-                if (start.isNotBlank() && end.isNotBlank()) {
-                    imagesArray.put(start)
-                    imagesArray.put(end)
-                } else if (start.isNotBlank()) {
-                    imagesArray.put(start)
-                    imagesArray.put(start)
-                } else if (end.isNotBlank()) {
-                    imagesArray.put(end)
-                    imagesArray.put(end)
-                }
-                put("image", imagesArray)
-            } else {
-                put("mode", selectAgnesVideoMode(hasReferenceImage = false))
-            }
+        val firstFrame = startImageUrl?.trim()?.takeIf { it.isNotBlank() }
+        val lastFrame = endImageUrl?.trim()?.takeIf { it.isNotBlank() }
+        val hasImages = firstFrame != null || lastFrame != null
+        if (listOfNotNull(firstFrame, lastFrame).any { !it.startsWith("https://") && !it.startsWith("http://") }) {
+            return@withContext ApiResponse.Error(
+                400,
+                "Agnes Video 2.5 exige des URLs HTTP(S) accessibles pour les images de référence; l’upload temporaire a échoué.",
+                "invalid_image_url"
+            )
         }
 
         val requestJson = JSONObject().apply {
             put("model", model)
             put("prompt", requestPrompt)
-            put("num_frames", numFrames)
-            put("frame_rate", 24)
-            put("width", if (resolution.contains("9:16")) 576 else 1024)
-            put("height", if (resolution.contains("9:16")) 1024 else 576)
-            put("extra_body", extraBody)
+            put("seconds", requestedVideoSeconds.toString())
+            put("mode", selectAgnesVideoMode(hasReferenceImage = hasImages))
+            put("size", agnesVideoSize(resolution))
+            put("aspect_ratio", if (resolution.contains("9:16")) "9:16" else "16:9")
+            firstFrame?.let { put("first_frame", it) }
+            lastFrame?.let { put("last_frame", it) }
         }
 
         val request = Request.Builder()
@@ -413,7 +412,7 @@ class ApiClient(
 
                 if (response.isSuccessful) {
                     val json = JSONObject(body)
-                    val videoId = json.optString("video_id", json.optString("id", ""))
+                    val videoId = json.optString("video_id", json.optString("id", json.optString("task_id", "")))
                     if (videoId.isNotBlank()) {
                         rateLimiter.registerVideoDispatch()
                         TechnicalLogManager.log("API_VID", "201 Created: ID=$videoId (status: queued)")
@@ -459,7 +458,7 @@ class ApiClient(
     }
 
     /**
-     * Polling vidéo réel avec détection de stall (6 polls identiques) et gestion des erreurs.
+     * Polling vidéo réel avec détection de stall et gestion des erreurs.
      */
     suspend fun pollVideo(
         apiKey: String,
@@ -482,16 +481,16 @@ class ApiClient(
         var lastStatus = ""
         var stallRetries = 0
 
-        // Attente initiale (FIRST_POLL_DELAY_MS = 120s selon cahier des charges)
-        TechnicalLogManager.log("POLL", "Démarrage polling vidéo $videoId (intervalle 30s)")
+        TechnicalLogManager.log("POLL", "Démarrage polling vidéo $videoId (intervalle ${RateLimiter.POLL_INTERVAL_MS / 1_000}s)")
 
         for (pollAttempt in 1..RateLimiter.MAX_POLL_ATTEMPTS) {
             if (stopRequested()) throw CancellationException("Annulé par l'utilisateur")
 
-            rateLimiter.realWait(RateLimiter.POLL_INTERVAL_MS, stopRequested)
+            val waitMs = if (pollAttempt == 1) RateLimiter.FIRST_POLL_DELAY_MS else RateLimiter.POLL_INTERVAL_MS
+            rateLimiter.realWait(waitMs, stopRequested)
 
             try {
-                val pollUrl = "$AGNES_POLL_URL?video_id=$videoId&model_name=agnes-video-v2.0"
+                val pollUrl = "$AGNES_POLL_URL?video_id=$videoId&model_name=$AGNES_VIDEO_MODEL"
                 val request = Request.Builder()
                     .url(pollUrl)
                     .addHeader("Authorization", "Bearer $cleanKey")
@@ -509,7 +508,7 @@ class ApiClient(
                     val directUrl = json.optString("url", "")
                     val videoUrl = if (directUrl.isNotBlank()) directUrl else json.optJSONObject("metadata")?.optString("url", "").orEmpty()
 
-                    // Détection de blocage (StallDetector : 6 polls identiques)
+                    // Détection de blocage après 15 polls identiques (environ 30 secondes).
                     if (progress == lastProgress && status == lastStatus && status != "completed") {
                         sameCount++
                         if (sameCount >= RateLimiter.STALL_THRESHOLD) {
@@ -532,7 +531,7 @@ class ApiClient(
 
                     if (status == "completed" || (progress >= 100 && !videoUrl.isNullOrBlank())) {
                         if (!videoUrl.isNullOrBlank()) {
-                            usageTracker.recordVideoRequest(durationSeconds.toDouble())
+                            usageTracker.recordVideoRequest(durationSeconds.coerceIn(4, 12).toDouble())
                             TechnicalLogManager.log("API_VID", "Vidéo $videoId finalisée avec succès: $videoUrl")
                             onProgressUpdate(100, "done", false)
                             return@withContext ApiResponse.Success(
@@ -550,6 +549,10 @@ class ApiClient(
                     val retryMs = retryAfterMillis(response)
                     TechnicalLogManager.log("POLL", "429 Rate limit pendant le polling - Pause ${retryMs / 1_000}s", "WARN")
                     rateLimiter.realWait(retryMs, stopRequested)
+                } else if (code == 401 || code == 403) {
+                    return@withContext ApiResponse.Error(code, "Authentification refusée par Agnes pendant le suivi ($code)", "auth_error")
+                } else if (code in 400..499) {
+                    return@withContext ApiResponse.Error(code, "Suivi vidéo refusé par Agnes ($code) : $body", "invalid_request")
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e

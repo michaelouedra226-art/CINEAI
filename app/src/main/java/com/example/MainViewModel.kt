@@ -146,10 +146,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun selectTab(screen: AgnesScreen) {
+        screenBackStack.clear()
+        screenBackStack.add(screen)
+        _currentScreen.value = screen
+        if (screen == AgnesScreen.GALLERY) {
+            _hasGalleryBadge.value = false
+        }
+    }
+
     fun handleBackPress(): Boolean {
         if (screenBackStack.size > 1) {
             screenBackStack.removeAt(screenBackStack.size - 1)
             _currentScreen.value = screenBackStack.last()
+            return true
+        }
+        if (_currentScreen.value != AgnesScreen.IMAGES) {
+            selectTab(AgnesScreen.IMAGES)
             return true
         }
         return false

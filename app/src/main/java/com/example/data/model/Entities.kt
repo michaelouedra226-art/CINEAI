@@ -5,6 +5,8 @@ import androidx.room.PrimaryKey
 import org.json.JSONArray
 import org.json.JSONObject
 
+const val AGNES_VIDEO_MODEL = "agnes-video-2.5"
+
 @Entity(tableName = "creations")
 data class CreationEntity(
     @PrimaryKey val id: String,
@@ -39,8 +41,8 @@ data class FilmEntity(
     val requestedDuration: Double = 30.0,
     val duration: Double = 30.0,
     val numScenes: Int = 5,
-    val framesPerScene: Int = 121,
-    val durationPerScene: Double = 5.042,
+    val framesPerScene: Int = 120,
+    val durationPerScene: Double = 5.0,
     val actualDuration: Int = 0,
     val filmStyle: String = "Cinématique",
     val scenesJson: String = "[]",
@@ -98,7 +100,7 @@ data class SettingsEntity(
     val apiKey: String = "",
     val rateLimitProfile: String = "free", // "free" | "token" | "enterprise"
     val defaultImageModel: String = "agnes-image-2.1-flash",
-    val defaultVideoModel: String = "agnes-video-v2.0",
+    val defaultVideoModel: String = AGNES_VIDEO_MODEL,
     val defaultTextModel: String = "agnes-2.5-flash",
     val defaultImageSize: String = "2K",
     val defaultImageRatio: String = "9:16",

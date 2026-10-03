@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.RateLimiter
+import com.example.data.model.AGNES_VIDEO_MODEL
 import com.example.data.model.SettingsEntity
 import com.example.data.model.UsageEntity
 import com.example.ui.components.AgnesShimmerProgressBar
@@ -223,7 +224,7 @@ fun SettingsScreen(
             ) {
                 Text(text = "Vidéo Synthèse :", color = Color(0xFFCCCCCC), fontSize = 13.sp)
                 Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C25)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    Text(text = "agnes-video-v2.0", color = Color(0xFFA78BFA), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Text(text = AGNES_VIDEO_MODEL, color = Color(0xFFA78BFA), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 }
             }
         }

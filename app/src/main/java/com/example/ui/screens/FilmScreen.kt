@@ -65,6 +65,7 @@ import coil.compose.AsyncImage
 import com.example.data.model.CreationEntity
 import com.example.data.model.FilmEntity
 import com.example.data.model.SceneItem
+import com.example.data.model.AGNES_VIDEO_MODEL
 import com.example.data.repository.AgnesRepository
 import com.example.ui.components.AgnesImagePickerModal
 import com.example.ui.components.AgnesInteractiveCard
@@ -229,7 +230,7 @@ fun FilmScreen(
                 id = "scene_${sc.number}",
                 type = if (isVideo) "video" else "image",
                 prompt = sc.video_prompt.ifBlank { sc.image_prompt },
-                model = if (isVideo) "agnes-video-v2.0" else "agnes-image-2.1-flash",
+                model = if (isVideo) AGNES_VIDEO_MODEL else "agnes-image-2.1-flash",
                 resultUrl = if (isVideo) sc.videoUrl else sc.keyframe,
                 thumbnail = sc.keyframe,
                 status = sc.status

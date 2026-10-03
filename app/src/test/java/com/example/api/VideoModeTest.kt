@@ -5,12 +5,12 @@ import org.junit.Test
 
 class VideoModeTest {
     @Test
-    fun textOnlyVideoUsesAgnesTi2VidMode() {
-        assertEquals("ti2vid", selectAgnesVideoMode(hasReferenceImage = false))
+    fun textOnlyVideoUsesAgnesTextMode() {
+        assertEquals("text", selectAgnesVideoMode(hasReferenceImage = false))
     }
 
     @Test
-    fun videoWithReferenceImageUsesKeyframesMode() {
-        assertEquals("keyframes", selectAgnesVideoMode(hasReferenceImage = true))
+    fun videoWithReferenceImageUsesKeyframeMode() {
+        assertEquals("keyframe", selectAgnesVideoMode(hasReferenceImage = true))
     }
 }

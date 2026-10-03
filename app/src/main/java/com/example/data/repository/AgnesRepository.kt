@@ -12,12 +12,13 @@ import com.example.data.dao.QueueDao
 import com.example.data.dao.SettingsDao
 import com.example.data.dao.UsageDao
 import com.example.data.model.CreationEntity
+import com.example.data.model.AGNES_VIDEO_MODEL
 import com.example.data.model.FilmEntity
 import com.example.data.model.QueueItemEntity
 import com.example.data.model.SceneItem
 import com.example.data.model.SettingsEntity
 import com.example.data.model.UsageEntity
-import com.example.util.ImagePickerHelper
+import com.example.media.SupabaseImageStorage
 import com.example.util.OfflineVideoManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -49,19 +50,20 @@ class AgnesRepository(
     val settings: Flow<SettingsEntity?> = settingsDao.getSettings()
 
     companion object {
-        // Frames valides respectant la contrainte 8n + 1 de l'API Agnes
-        val ALLOWED_FRAMES = listOf(
-            81 to 3.375,   // 81 / 24
-            121 to 5.042,  // 121 / 24
-            153 to 6.375,  // 153 / 24
-            241 to 10.042, // 241 / 24
-            441 to 18.375  // 441 / 24
+        // Durées entières acceptées par Agnes Video 2.5 (4 à 12 secondes).
+        val ALLOWED_VIDEO_DURATIONS = listOf(
+            96 to 4.0,
+            120 to 5.0,
+            144 to 6.0,
+            192 to 8.0,
+            240 to 10.0,
+            288 to 12.0
         )
 
         fun calculateBreakdown(requestedSeconds: Double, manualScenes: Int?): FilmBreakdown {
             if (manualScenes != null && manualScenes >= 1) {
                 val targetPerScene = requestedSeconds / manualScenes
-                val closest = ALLOWED_FRAMES.minByOrNull { kotlin.math.abs(it.second - targetPerScene) } ?: ALLOWED_FRAMES[1]
+                val closest = ALLOWED_VIDEO_DURATIONS.minByOrNull { kotlin.math.abs(it.second - targetPerScene) } ?: ALLOWED_VIDEO_DURATIONS[1]
                 return FilmBreakdown(
                     numScenes = manualScenes,
                     framesPerScene = closest.first,
@@ -69,16 +71,33 @@ class AgnesRepository(
                     actualTotalDuration = manualScenes * closest.second
                 )
             } else {
-                val idealSec = 5.042
+                val idealSec = 5.0
                 val computedScenes = (requestedSeconds / idealSec).toInt().coerceIn(2, 250)
                 return FilmBreakdown(
                     numScenes = computedScenes,
-                    framesPerScene = 121,
+                    framesPerScene = 120,
                     durationPerScene = idealSec,
                     actualTotalDuration = computedScenes * idealSec
                 )
             }
         }
+    }
+
+    private suspend fun resolveVideoImage(
+        source: String,
+        temporaryImages: MutableList<SupabaseImageStorage.ResolvedImage>
+    ): String {
+        val trimmed = source.trim()
+        if (trimmed.isBlank() || SupabaseImageStorage.isHttpUrl(trimmed)) return trimmed
+        val appContext = context ?: throw IllegalStateException("Le stockage temporaire des images n’est pas disponible sur cet appareil.")
+        val resolved = SupabaseImageStorage.resolveImageSource(appContext, trimmed)
+        if (resolved.objectPath != null) temporaryImages.add(resolved)
+        return resolved.url
+    }
+
+    private suspend fun cleanupVideoImages(temporaryImages: List<SupabaseImageStorage.ResolvedImage>) {
+        val appContext = context ?: return
+        temporaryImages.forEach { SupabaseImageStorage.deleteTemporaryImage(appContext, it) }
     }
 
     fun getTodayUsage(): Flow<UsageEntity?> {
@@ -91,6 +110,9 @@ class AgnesRepository(
         if (current == null) {
             settingsDao.insertOrUpdate(SettingsEntity())
             TechnicalLogManager.log("INIT", "Initialisation des réglages Agnes Studio")
+        } else if (current.defaultVideoModel == "agnes-video-v2.0") {
+            settingsDao.insertOrUpdate(current.copy(defaultVideoModel = AGNES_VIDEO_MODEL))
+            TechnicalLogManager.log("INIT", "Modèle vidéo obsolète migré vers $AGNES_VIDEO_MODEL")
         }
 
         // Nettoyage impératif de toute donnée de démonstration antérieure
@@ -195,17 +217,44 @@ class AgnesRepository(
             stopRequested = stopRequested
         )) {
             is ApiResponse.Success -> {
-                val urls = res.data.urls
-                val primaryUrl = urls.firstOrNull()
-                creationDao.updateStatus(
-                    id = creationId,
-                    status = "done",
-                    progress = 100,
-                    resultUrl = primaryUrl,
-                    thumbnail = primaryUrl,
-                    error = null
-                )
-                onDone?.invoke(true, null)
+                val urls = res.data.urls.filter { it.isNotBlank() }
+                if (urls.isEmpty()) {
+                    val message = "Agnes n’a renvoyé aucune image pour cette génération."
+                    creationDao.updateStatus(creationId, "failed", 0, null, null, message)
+                    onDone?.invoke(false, message)
+                } else {
+                    val now = System.currentTimeMillis()
+                    urls.drop(1).forEachIndexed { index, url ->
+                        val variationNumber = index + 2
+                        val variationMeta = JSONObject(meta.toString())
+                            .put("variationIndex", variationNumber)
+                            .put("variationTotal", urls.size)
+                            .toString()
+                        creationDao.insert(
+                            entity.copy(
+                                id = "${creationId}_v$variationNumber",
+                                status = "done",
+                                createdAt = now,
+                                updatedAt = now,
+                                resultUrl = url,
+                                thumbnail = url,
+                                metadataJson = variationMeta,
+                                error = null,
+                                progress = 100
+                            )
+                        )
+                    }
+                    val primaryUrl = urls.first()
+                    creationDao.updateStatus(
+                        id = creationId,
+                        status = "done",
+                        progress = 100,
+                        resultUrl = primaryUrl,
+                        thumbnail = primaryUrl,
+                        error = null
+                    )
+                    onDone?.invoke(true, null)
+                }
             }
             is ApiResponse.Error -> {
                 creationDao.updateStatus(
@@ -275,17 +324,16 @@ class AgnesRepository(
         )
         queueDao.insert(queueItem)
 
+        val temporaryImages = mutableListOf<SupabaseImageStorage.ResolvedImage>()
+        try {
+
         // Si aucune image de départ n'est fournie (mode Texte -> Vidéo), on génère en amont
         // une image clé cinématique haute définition (comme dans le mode Film qui réussit à 100%)
-        // afin de fournir un keyframe de départ robuste au moteur agnes-video-v2.0.
+        // afin de fournir un keyframe de départ robuste au moteur Agnes Video 2.5.
         var effectiveStartImage: String? = null
 
         if (!startImageUrl.isNullOrBlank()) {
-            effectiveStartImage = if (context != null) {
-                ImagePickerHelper.prepareImageForApi(context, startImageUrl)
-            } else {
-                startImageUrl
-            }
+            effectiveStartImage = resolveVideoImage(startImageUrl, temporaryImages)
         } else {
             queueDao.update(queueItem.copy(status = "processing", progress = 5))
             creationDao.updateStatus(creationId, "processing", 5, null, null, null)
@@ -303,7 +351,7 @@ class AgnesRepository(
 
             if (imgRes is ApiResponse.Success) {
                 val keyframeUrl = imgRes.data.urls.firstOrNull()
-                effectiveStartImage = keyframeUrl
+                effectiveStartImage = if (keyframeUrl.isNullOrBlank()) null else resolveVideoImage(keyframeUrl, temporaryImages)
                 creationDao.updateStatus(creationId, "processing", 10, null, keyframeUrl, null)
             }
         }
@@ -390,6 +438,9 @@ class AgnesRepository(
                 creationDao.updateStatus(creationId, "stalled", 0, null, effectiveStartImage, initRes.message)
                 onDone?.invoke(false, initRes.message)
             }
+        }
+        } finally {
+            cleanupVideoImages(temporaryImages)
         }
     }
 
@@ -546,9 +597,11 @@ class AgnesRepository(
         }
 
         // ═══════════════════════════════════════════════════════
-        // PHASE 3 : VIDÉOS SÉQUENTIELLES (agnes-video-v2.0)
+        // PHASE 3 : VIDÉOS SÉQUENTIELLES (agnes-video-2.5)
         // ═══════════════════════════════════════════════════════
-        var previousFrameUrl = startImage
+        val temporaryImages = mutableListOf<SupabaseImageStorage.ResolvedImage>()
+        try {
+        var previousFrameUrl = resolveVideoImage(startImage, temporaryImages)
 
         for (i in sceneItems.indices) {
             if (stopRequested()) {
@@ -564,8 +617,10 @@ class AgnesRepository(
             onSceneUpdate?.invoke(sceneItems, pctBase, "Phase 3 : Synthèse vidéo scène ${sc.number}/$numScenes (dialogue ${dialogueLanguage.uppercase()})...")
 
             val isCustomStartImage = (i == 0 && startImage.isNotBlank())
-            val startUrl = if (isCustomStartImage) startImage else previousFrameUrl.ifBlank { currentKeyframe }
-            val endUrl = currentKeyframe.ifBlank { startUrl }
+            val rawStartUrl = if (isCustomStartImage) previousFrameUrl else previousFrameUrl.ifBlank { currentKeyframe }
+            val rawEndUrl = currentKeyframe.ifBlank { rawStartUrl }
+            val startUrl = resolveVideoImage(rawStartUrl, temporaryImages)
+            val endUrl = if (rawEndUrl == rawStartUrl) startUrl else resolveVideoImage(rawEndUrl, temporaryImages)
 
             val cleanVideoPrompt = buildCleanVideoPrompt(sc, filmStyle, dialogueLanguage)
 
@@ -575,10 +630,10 @@ class AgnesRepository(
                 prompt = cleanVideoPrompt,
                 startImageUrl = startUrl,
                 endImageUrl = endUrl,
-                durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
+                durationSeconds = breakdown.durationPerScene.toInt().coerceIn(4, 12),
                 numFrames = breakdown.framesPerScene,
                 resolution = "720p 16:9",
-                model = "agnes-video-v2.0",
+                model = AGNES_VIDEO_MODEL,
                 stopRequested = stopRequested
             )
 
@@ -594,7 +649,7 @@ class AgnesRepository(
             val pollRes = apiClient.pollVideo(
                 apiKey = settings.apiKey,
                 videoId = videoId,
-                durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
+                durationSeconds = breakdown.durationPerScene.toInt().coerceIn(4, 12),
                 stopRequested = stopRequested
             ) { prog, _, isStalled ->
                 val txt = if (isStalled) "Stall détecté sur le serveur, attente..." else "Progression: $prog%"
@@ -641,6 +696,9 @@ class AgnesRepository(
                     onSceneUpdate?.invoke(sceneItems, pctBase + 10, "Pause RPM anti-throttling : ${rem}s...")
                 }
             }
+        }
+        } finally {
+            cleanupVideoImages(temporaryImages)
         }
 
         // ═══════════════════════════════════════════════════════
@@ -758,7 +816,13 @@ class AgnesRepository(
         }
 
         // Phase 3 : Vidéos manquantes
-        var previousFrameUrl = film.startImage
+        val temporaryImages = mutableListOf<SupabaseImageStorage.ResolvedImage>()
+        try {
+        var previousFrameUrl = if (sceneItems.firstOrNull()?.status == "done") {
+            film.startImage
+        } else {
+            resolveVideoImage(film.startImage, temporaryImages)
+        }
         for (i in sceneItems.indices) {
             if (stopRequested()) {
                 filmDao.update(film.copy(status = "partial", failureReason = "Interrompu par l'utilisateur", scenesJson = SceneItem.serializeList(sceneItems)))
@@ -773,8 +837,10 @@ class AgnesRepository(
                 onSceneUpdate?.invoke(sceneItems, pctBase, "Scène ${sc.number}/$numScenes (reprise synchro)...")
 
                 val isCustomStartImage = (i == 0 && film.startImage.isNotBlank())
-                val startUrl = if (isCustomStartImage) film.startImage else previousFrameUrl.ifBlank { currentKeyframe }
-                val endUrl = currentKeyframe.ifBlank { startUrl }
+                val rawStartUrl = if (isCustomStartImage) previousFrameUrl else previousFrameUrl.ifBlank { currentKeyframe }
+                val rawEndUrl = currentKeyframe.ifBlank { rawStartUrl }
+                val startUrl = resolveVideoImage(rawStartUrl, temporaryImages)
+                val endUrl = if (rawEndUrl == rawStartUrl) startUrl else resolveVideoImage(rawEndUrl, temporaryImages)
 
                 val cleanVideoPrompt = buildCleanVideoPrompt(sc, film.filmStyle, "fr")
 
@@ -784,10 +850,10 @@ class AgnesRepository(
                     prompt = cleanVideoPrompt,
                     startImageUrl = startUrl,
                     endImageUrl = endUrl,
-                    durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
+                    durationSeconds = breakdown.durationPerScene.toInt().coerceIn(4, 12),
                     numFrames = breakdown.framesPerScene,
                     resolution = "720p 16:9",
-                    model = "agnes-video-v2.0",
+                    model = AGNES_VIDEO_MODEL,
                     stopRequested = stopRequested
                 )
                 if (videoInit !is ApiResponse.Success) {
@@ -800,7 +866,7 @@ class AgnesRepository(
                 val pollRes = apiClient.pollVideo(
                     apiKey = settings.apiKey,
                     videoId = videoId,
-                    durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
+                    durationSeconds = breakdown.durationPerScene.toInt().coerceIn(4, 12),
                     stopRequested = stopRequested
                 ) { prog, _, isStalled ->
                     val txt = if (isStalled) "Stall détecté, attente..." else "Progression: $prog%"
@@ -831,6 +897,9 @@ class AgnesRepository(
             }
             previousFrameUrl = currentKeyframe
         }
+        } finally {
+            cleanupVideoImages(temporaryImages)
+        }
 
         // Finalisation
         val finishedFilm = film.copy(
@@ -844,7 +913,7 @@ class AgnesRepository(
     }
 
     /**
-     * Construit le prompt vidéo définitif pour agnes-video-v2.0 :
+     * Construit le prompt vidéo définitif pour Agnes Video 2.5 :
      * - Purge systématiquement tout vestige de directive audio déjà injectée dans le prompt pour empêcher tout dédoublement.
      * - Extrait les paroles réelles (sans le préfixe du personnage) et impose une délivrance UNIQUE sans répétition.
      * - Adopte une cinématographie humaine réaliste (cadre stable, gestuelle naturelle, grain 35mm).
@@ -954,16 +1023,20 @@ class AgnesRepository(
 
         val cleanPrompt = buildCleanVideoPrompt(sc, film.filmStyle, "fr")
 
+        val temporaryImages = mutableListOf<SupabaseImageStorage.ResolvedImage>()
+        try {
+        val resolvedStartUrl = resolveVideoImage(startUrl, temporaryImages)
+        val resolvedEndUrl = if (endUrl == startUrl) resolvedStartUrl else resolveVideoImage(endUrl, temporaryImages)
         val videoInit = apiClient.initiateVideo(
             apiKey = settings.apiKey,
             profile = settings.rateLimitProfile,
             prompt = cleanPrompt,
-            startImageUrl = startUrl,
-            endImageUrl = endUrl,
+            startImageUrl = resolvedStartUrl,
+            endImageUrl = resolvedEndUrl,
             durationSeconds = 4,
             numFrames = 64,
             resolution = "720p 16:9",
-            model = "agnes-video-v2.0",
+            model = AGNES_VIDEO_MODEL,
             stopRequested = stopRequested
         )
 
@@ -1006,6 +1079,9 @@ class AgnesRepository(
         filmDao.update(film.copy(scenesJson = SceneItem.serializeList(sceneItems)))
         onSceneUpdate?.invoke(sceneItems, 100, "Scène $sceneNumber prête !")
         return@withContext finalScene
+        } finally {
+            cleanupVideoImages(temporaryImages)
+        }
     }
 
     /**
