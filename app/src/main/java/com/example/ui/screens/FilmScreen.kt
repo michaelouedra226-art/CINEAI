@@ -2213,6 +2213,13 @@ fun FilmScreen(
                 fontSize = 11.sp,
                 lineHeight = 15.sp
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "FORMAT CINÉMA 16:9 • Plans variés : décor, action, réactions, détails et face-à-face.",
+                color = Color(0xFFA78BFA),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium
+            )
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = filmPrompt,

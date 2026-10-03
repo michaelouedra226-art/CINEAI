@@ -516,16 +516,16 @@ class AgnesRepository(
                 "[MASTER CONTINUITY: ${sc.characterAnchor}, identical facial features and clothing], "
             } else ""
             val keyframePrompt = if (sc.image_prompt.contains("35mm", ignoreCase = true)) {
-                "$charPrefix${sc.image_prompt}, style $filmStyle, 9:16 vertical format"
+                "$charPrefix${sc.image_prompt}, style $filmStyle, 16:9 widescreen cinema format"
             } else {
-                "$charPrefix${sc.image_prompt}, shot on 35mm film, natural realistic lighting, authentic human texture and skin tones, style $filmStyle, 9:16 vertical format"
+                "$charPrefix${sc.image_prompt}, shot on 35mm film, natural realistic lighting, authentic human texture and skin tones, style $filmStyle, 16:9 widescreen cinema format"
             }
             val imgRes = apiClient.generateImage(
                 apiKey = settings.apiKey,
                 prompt = keyframePrompt,
                 style = filmStyle,
                 size = "2K",
-                ratio = "9:16",
+                ratio = "16:9",
                 variations = 1,
                 model = "agnes-image-2.1-flash",
                 stopRequested = stopRequested
@@ -548,7 +548,7 @@ class AgnesRepository(
         // ═══════════════════════════════════════════════════════
         // PHASE 3 : VIDÉOS SÉQUENTIELLES (agnes-video-v2.0)
         // ═══════════════════════════════════════════════════════
-        var previousFrameUrl = startImage.ifBlank { sceneItems.firstOrNull()?.keyframe.orEmpty() }
+        var previousFrameUrl = startImage
 
         for (i in sceneItems.indices) {
             if (stopRequested()) {
@@ -564,7 +564,7 @@ class AgnesRepository(
             onSceneUpdate?.invoke(sceneItems, pctBase, "Phase 3 : Synthèse vidéo scène ${sc.number}/$numScenes (dialogue ${dialogueLanguage.uppercase()})...")
 
             val isCustomStartImage = (i == 0 && startImage.isNotBlank())
-            val startUrl = if (isCustomStartImage) startImage else (currentKeyframe.ifBlank { previousFrameUrl })
+            val startUrl = if (isCustomStartImage) startImage else previousFrameUrl.ifBlank { currentKeyframe }
             val endUrl = currentKeyframe.ifBlank { startUrl }
 
             val cleanVideoPrompt = buildCleanVideoPrompt(sc, filmStyle, dialogueLanguage)
@@ -577,7 +577,7 @@ class AgnesRepository(
                 endImageUrl = endUrl,
                 durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
                 numFrames = breakdown.framesPerScene,
-                resolution = "720p 9:16",
+                resolution = "720p 16:9",
                 model = "agnes-video-v2.0",
                 stopRequested = stopRequested
             )
@@ -737,13 +737,13 @@ class AgnesRepository(
                 val charPrefix = if (sc.characterAnchor.isNotBlank() && !sc.image_prompt.contains(sc.characterAnchor)) {
                     "[MASTER CONTINUITY: ${sc.characterAnchor}, identical face structure and signature outfit], "
                 } else ""
-                val keyframePrompt = "$charPrefix${sc.image_prompt}, master studio keyframe, style ${film.filmStyle}, 35mm anamorphic lens, volumetric lighting, 9:16 vertical cinema, 8k"
+                val keyframePrompt = "$charPrefix${sc.image_prompt}, master studio keyframe, style ${film.filmStyle}, 35mm anamorphic lens, volumetric lighting, 16:9 widescreen cinema, 8k"
                 val imgRes = apiClient.generateImage(
                     apiKey = settings.apiKey,
                     prompt = keyframePrompt,
                     style = film.filmStyle,
                     size = "2K",
-                    ratio = "9:16",
+                    ratio = "16:9",
                     variations = 1,
                     model = "agnes-image-2.1-flash",
                     stopRequested = stopRequested
@@ -758,7 +758,7 @@ class AgnesRepository(
         }
 
         // Phase 3 : Vidéos manquantes
-        var previousFrameUrl = film.startImage.ifBlank { sceneItems.firstOrNull()?.keyframe.orEmpty() }
+        var previousFrameUrl = film.startImage
         for (i in sceneItems.indices) {
             if (stopRequested()) {
                 filmDao.update(film.copy(status = "partial", failureReason = "Interrompu par l'utilisateur", scenesJson = SceneItem.serializeList(sceneItems)))
@@ -773,7 +773,7 @@ class AgnesRepository(
                 onSceneUpdate?.invoke(sceneItems, pctBase, "Scène ${sc.number}/$numScenes (reprise synchro)...")
 
                 val isCustomStartImage = (i == 0 && film.startImage.isNotBlank())
-                val startUrl = if (isCustomStartImage) film.startImage else (currentKeyframe.ifBlank { previousFrameUrl })
+                val startUrl = if (isCustomStartImage) film.startImage else previousFrameUrl.ifBlank { currentKeyframe }
                 val endUrl = currentKeyframe.ifBlank { startUrl }
 
                 val cleanVideoPrompt = buildCleanVideoPrompt(sc, film.filmStyle, "fr")
@@ -786,7 +786,7 @@ class AgnesRepository(
                     endImageUrl = endUrl,
                     durationSeconds = breakdown.durationPerScene.toInt().coerceAtLeast(3),
                     numFrames = breakdown.framesPerScene,
-                    resolution = "720p 9:16",
+                    resolution = "720p 16:9",
                     model = "agnes-video-v2.0",
                     stopRequested = stopRequested
                 )
@@ -901,8 +901,14 @@ class AgnesRepository(
             }
         }
 
-        val charPrefix = if (scene.characterAnchor.isNotBlank() && !baseAction.contains(scene.characterAnchor)) {
-            "[Character: ${scene.characterAnchor}], "
+        val anchor = scene.characterAnchor.trim()
+        val charPrefix = if (
+            anchor.isNotBlank() &&
+            !anchor.contains("no human subject", ignoreCase = true) &&
+            !anchor.contains("scene-led focus", ignoreCase = true) &&
+            !baseAction.contains(anchor, ignoreCase = true)
+        ) {
+            "[Scene continuity: $anchor], "
         } else ""
 
         val humanRealism = "natural human acting and body language, organic camera work, 35mm film grain, style $filmStyle, do not repeat dialogue"
@@ -943,7 +949,7 @@ class AgnesRepository(
         onSceneUpdate?.invoke(sceneItems, 10, "Reshoot scène $sceneNumber en cours...")
 
         val previousKeyframe = if (index > 0) sceneItems[index - 1].keyframe.orEmpty() else film.startImage
-        val startUrl = if (index == 0 && film.startImage.isNotBlank()) film.startImage else (sc.keyframe ?: previousKeyframe)
+        val startUrl = if (index == 0 && film.startImage.isNotBlank()) film.startImage else previousKeyframe.ifBlank { sc.keyframe.orEmpty() }
         val endUrl = sc.keyframe ?: startUrl
 
         val cleanPrompt = buildCleanVideoPrompt(sc, film.filmStyle, "fr")
@@ -956,7 +962,7 @@ class AgnesRepository(
             endImageUrl = endUrl,
             durationSeconds = 4,
             numFrames = 64,
-            resolution = "720p 9:16",
+            resolution = "720p 16:9",
             model = "agnes-video-v2.0",
             stopRequested = stopRequested
         )
