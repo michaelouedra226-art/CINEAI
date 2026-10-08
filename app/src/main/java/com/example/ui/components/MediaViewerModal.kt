@@ -10,6 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -94,6 +96,7 @@ fun MediaViewerModal(
     val context = LocalContext.current
     var isDetailsExpanded by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var isFullscreenModal by remember { mutableStateOf(false) }
 
     val isFilm = film != null
     val isVideo = isFilm || creation?.type == "video"
@@ -164,15 +167,16 @@ fun MediaViewerModal(
                 .background(Color(0xFF09090E))
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // ─── TOP BAR ───────────────────────────────────────
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xEE13131A))
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                // ─── TOP BAR (masquée en mode plein écran) ─────────
+                if (!isFullscreenModal) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xEE13131A))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -294,6 +298,7 @@ fun MediaViewerModal(
                         }
                     }
                 }
+            }
 
                 // ─── MEDIA CONTENT VIEWPORT ───────────────────────
                 Box(
@@ -317,7 +322,12 @@ fun MediaViewerModal(
                         }
                         isVideo -> {
                             if (primaryUrl.isNotBlank()) {
-                                VideoPlayerComponent(videoUrl = primaryUrl)
+                                VideoPlayerComponent(
+                                    videoUrl = primaryUrl,
+                                    dialogue = creation?.prompt,
+                                    isFullScreen = isFullscreenModal,
+                                    onToggleFullScreen = { isFullscreenModal = !isFullscreenModal }
+                                )
                             } else {
                                 EmptyMediaState(message = "Rendu vidéo en cours ou lien indisponible")
                             }
@@ -332,72 +342,74 @@ fun MediaViewerModal(
                     }
                 }
 
-                // ─── BOTTOM DETAILS ACCORDION ─────────────────────
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xEE13131A))
-                        .padding(16.dp)
-                ) {
-                    Row(
+                // ─── BOTTOM DETAILS ACCORDION (masqué en mode plein écran) ─────
+                if (!isFullscreenModal) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { isDetailsExpanded = !isDetailsExpanded },
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .background(Color(0xEE13131A))
+                            .padding(16.dp)
                     ) {
-                        Text(
-                            text = if (isDetailsExpanded) "Masquer les détails ▲" else "Afficher les détails du prompt ▼",
-                            color = Color(0xFFA78BFA),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        val promptToCopy = creation?.prompt ?: film?.prompt.orEmpty()
-                        if (promptToCopy.isNotBlank()) {
-                            Text(
-                                text = "Copier le prompt",
-                                color = Color(0xFF34D399),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.clickable {
-                                    triggerHapticFeedback(context)
-                                    DownloadHelper.copyPrompt(context, promptToCopy)
-                                }
-                            )
-                        }
-                    }
-
-                    AnimatedVisibility(visible = isDetailsExpanded) {
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 10.dp)
-                                .verticalScroll(rememberScrollState())
+                                .clickable { isDetailsExpanded = !isDetailsExpanded },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val promptText = creation?.prompt ?: film?.prompt.orEmpty()
-                            if (promptText.isNotBlank()) {
+                            Text(
+                                text = if (isDetailsExpanded) "Masquer les détails ▲" else "Afficher les détails du prompt ▼",
+                                color = Color(0xFFA78BFA),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            val promptToCopy = creation?.prompt ?: film?.prompt.orEmpty()
+                            if (promptToCopy.isNotBlank()) {
                                 Text(
-                                    text = promptText,
-                                    color = Color(0xFFE5E7EB),
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp
+                                    text = "Copier le prompt",
+                                    color = Color(0xFF34D399),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.clickable {
+                                        triggerHapticFeedback(context)
+                                        DownloadHelper.copyPrompt(context, promptToCopy)
+                                    }
                                 )
-                                Spacer(modifier = Modifier.height(10.dp))
                             }
+                        }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        AnimatedVisibility(visible = isDetailsExpanded) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp)
+                                    .verticalScroll(rememberScrollState())
                             ) {
-                                if (creation != null) {
-                                    InfoBadge(label = "Modèle", value = creation.model)
-                                    InfoBadge(label = "Type", value = creation.type.uppercase())
-                                    InfoBadge(label = "Statut", value = creation.status)
+                                val promptText = creation?.prompt ?: film?.prompt.orEmpty()
+                                if (promptText.isNotBlank()) {
+                                    Text(
+                                        text = promptText,
+                                        color = Color(0xFFE5E7EB),
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
                                 }
-                                if (film != null) {
-                                    InfoBadge(label = "Style", value = film.filmStyle)
-                                    InfoBadge(label = "Plans", value = "${film.numScenes} scènes")
-                                    InfoBadge(label = "Durée", value = "${film.duration.toInt()}s")
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (creation != null) {
+                                        InfoBadge(label = "Modèle", value = creation.model)
+                                        InfoBadge(label = "Type", value = creation.type.uppercase())
+                                        InfoBadge(label = "Statut", value = creation.status)
+                                    }
+                                    if (film != null) {
+                                        InfoBadge(label = "Style", value = film.filmStyle)
+                                        InfoBadge(label = "Plans", value = "${film.numScenes} scènes")
+                                        InfoBadge(label = "Durée", value = "${film.duration.toInt()}s")
+                                    }
                                 }
                             }
                         }
@@ -486,6 +498,12 @@ fun VideoPlayerComponent(
     dialogue: String? = null,
     dialogueLanguage: String = "fr",
     audioMode: String = "dialogue",
+    charactersPresent: String? = null,
+    isFullScreen: Boolean = false,
+    onToggleFullScreen: (() -> Unit)? = null,
+    onNavigatePrevious: (() -> Unit)? = null,
+    onNavigateNext: (() -> Unit)? = null,
+    badgeText: String? = null,
     onComplete: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -502,10 +520,23 @@ fun VideoPlayerComponent(
     var isBuffering by remember(videoUrl) { mutableStateOf(true) }
     var hasError by remember(videoUrl) { mutableStateOf(false) }
     var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
+    var areControlsVisible by remember(videoUrl) { mutableStateOf(true) }
+    var isUserScrubbing by remember { mutableStateOf(false) }
 
     val isSpeaking by AgnesVoiceManager.isSpeaking.collectAsState()
+    val isTrueCharacterSpeech = remember(dialogue, charactersPresent) {
+        SceneItem.isCharacterSpeech(dialogue, charactersPresent)
+    }
 
-    // Téléchargement automatique en arrière-plan pour garantir la disponibilité 100% hors-ligne
+    // Auto-masquage cinématique des commandes après 2.8 secondes de lecture
+    LaunchedEffect(isPlaying, areControlsVisible, isUserScrubbing) {
+        if (isPlaying && areControlsVisible && !isUserScrubbing) {
+            delay(2800)
+            areControlsVisible = false
+        }
+    }
+
+    // Téléchargement en cache arrière-plan pour fluidité
     LaunchedEffect(videoUrl) {
         if (!isCachedLocally && videoUrl.startsWith("http")) {
             val cachedPath = OfflineVideoManager.cacheVideo(context, videoUrl)
@@ -515,16 +546,16 @@ fun VideoPlayerComponent(
         }
     }
 
-    // Synchronisation périodique de la progression vidéo
+    // Synchronisation de la progression
     LaunchedEffect(isPlaying, videoUrl) {
         while (isPlaying) {
             videoViewRef?.let { vv ->
-                if (vv.isPlaying) {
+                if (vv.isPlaying && !isUserScrubbing) {
                     currentPositionMs = vv.currentPosition
                     durationMs = vv.duration
                 }
             }
-            delay(250)
+            delay(200)
         }
     }
 
@@ -538,7 +569,13 @@ fun VideoPlayerComponent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                areControlsVisible = !areControlsVisible
+            },
         contentAlignment = Alignment.Center
     ) {
         if (!hasError) {
@@ -553,8 +590,12 @@ fun VideoPlayerComponent(
                                 mp.isLooping = isLooping
                                 start()
                                 isPlaying = true
-                                if (!dialogue.isNullOrBlank() && audioMode != "ambient") {
-                                    AgnesVoiceManager.speak(ctx, dialogue, dialogueLanguage)
+                                // Déclenchement TTS STRICTEMENT réservé aux répliques des personnages
+                                if (isTrueCharacterSpeech && audioMode != "ambient") {
+                                    val speech = SceneItem.extractSpokenSpeech(dialogue.orEmpty(), charactersPresent)
+                                    if (speech.isNotBlank()) {
+                                        AgnesVoiceManager.speak(ctx, speech, dialogueLanguage)
+                                    }
                                 }
                             }
                             setOnErrorListener { _, _, _ ->
@@ -577,7 +618,6 @@ fun VideoPlayerComponent(
                 )
             }
         } else {
-            // Repli sur l'image clé HD si la vidéo ne peut pas être lue
             if (!fallbackImageUrl.isNullOrBlank()) {
                 ImageViewerWithZoom(imageUrl = fallbackImageUrl)
             } else {
@@ -585,31 +625,209 @@ fun VideoPlayerComponent(
             }
         }
 
-        // Bandeau Sous-titres & Voix parlée du personnage en direct
-        if (!dialogue.isNullOrBlank() && audioMode != "ambient") {
+        // Indicateur de chargement
+        if (isBuffering) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xCC000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = Color(0xFFA78BFA), strokeWidth = 2.5.dp)
+            }
+        }
+
+        // Bouton central Play/Pause (s'estompe quand la vidéo tourne)
+        AnimatedVisibility(
+            visible = areControlsVisible || !isPlaying,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xAA0B0B14))
+                    .border(1.5.dp, Color(0x66A78BFA), CircleShape)
+                    .clickable {
+                        triggerHapticFeedback(context)
+                        videoViewRef?.let { vv ->
+                            if (vv.isPlaying) {
+                                vv.pause()
+                                isPlaying = false
+                                areControlsVisible = true
+                            } else {
+                                vv.start()
+                                isPlaying = true
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                AgnesSvgIcon(
+                    icon = if (isPlaying) AgnesIcon.PAUSE else AgnesIcon.PLAY,
+                    tint = Color.White,
+                    size = 22.dp
+                )
+            }
+        }
+
+        // Boutons latéraux de navigation Scène précédente / suivante (s'estompent)
+        if (onNavigatePrevious != null) {
+            AnimatedVisibility(
+                visible = areControlsVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x88000000))
+                        .border(1.dp, Color(0x33FFFFFF), CircleShape)
+                        .clickable {
+                            triggerHapticFeedback(context)
+                            onNavigatePrevious()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("‹", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (onNavigateNext != null) {
+            AnimatedVisibility(
+                visible = areControlsVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x88000000))
+                        .border(1.dp, Color(0x33FFFFFF), CircleShape)
+                        .clickable {
+                            triggerHapticFeedback(context)
+                            onNavigateNext()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("›", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // En-tête discret (Badges haut gauche / haut droite) qui s'estompe avec les contrôles
+        AnimatedVisibility(
+            visible = areControlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!badgeText.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xCC0F172A),
+                        border = BorderStroke(0.8.dp, Color(0xFF8B5CF6))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF34D399))
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = badgeText,
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(1.dp))
+                }
+
+                if (isCachedLocally) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xCC064E3B),
+                        border = BorderStroke(0.8.dp, Color(0xFF10B981))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AgnesSvgIcon(icon = AgnesIcon.CHECK, tint = Color(0xFF34D399), size = 11.dp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Hors-ligne",
+                                color = Color(0xFFD1FAE5),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sous-titres cinématiques : UNIQUEMENT pour les personnages, positionnés au-dessus des commandes
+        if (isTrueCharacterSpeech && audioMode != "ambient") {
+            val speakerName = SceneItem.extractCharacterSpeaker(dialogue.orEmpty())
+            val speechContent = SceneItem.extractSpokenSpeech(dialogue.orEmpty(), charactersPresent).ifBlank { dialogue.orEmpty() }
+
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 20.dp, start = 16.dp, end = 16.dp)
+                    .padding(
+                        bottom = if (areControlsVisible) 78.dp else 22.dp,
+                        start = 16.dp,
+                        end = 16.dp
+                    )
                     .fillMaxWidth(0.92f),
-                shape = RoundedCornerShape(10.dp),
-                color = Color(0xE60D0D14),
-                border = BorderStroke(1.dp, if (isSpeaking) Color(0xFFA78BFA) else Color(0x44FFFFFF))
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xD909090F),
+                border = BorderStroke(0.8.dp, if (isSpeaking) Color(0xFFA78BFA) else Color(0x44FFFFFF))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(24.dp)
                             .clip(CircleShape)
-                            .background(if (isSpeaking) Color(0xFF6D28D9) else Color(0xFF27273A))
+                            .background(if (isSpeaking) Color(0xFF7C3AED) else Color(0xFF262638))
                             .clickable {
                                 if (isSpeaking) {
                                     AgnesVoiceManager.stop()
                                 } else {
-                                    AgnesVoiceManager.speak(context, dialogue, dialogueLanguage)
+                                    val sp = SceneItem.extractSpokenSpeech(dialogue.orEmpty(), charactersPresent)
+                                    if (sp.isNotBlank()) AgnesVoiceManager.speak(context, sp, dialogueLanguage)
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -617,14 +835,14 @@ fun VideoPlayerComponent(
                         AgnesSvgIcon(
                             icon = AgnesIcon.AUDIO,
                             tint = if (isSpeaking) Color.White else Color(0xFFA78BFA),
-                            size = 14.dp
+                            size = 12.dp
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        if (isSpeaking) {
+                        if (speakerName != null) {
                             Text(
-                                text = "VOIX DU PERSONNAGE EN DIRECT",
+                                text = speakerName.uppercase(),
                                 color = Color(0xFFA78BFA),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
@@ -632,127 +850,147 @@ fun VideoPlayerComponent(
                             )
                         }
                         Text(
-                            text = dialogue,
+                            text = speechContent,
                             color = Color.White,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            lineHeight = 17.sp
+                            lineHeight = 16.sp
                         )
                     }
                 }
             }
         }
 
-        // Badge « Disponible hors-ligne » si stocké en local
-        if (isCachedLocally) {
-            Box(
+        // Overlay inférieur des contrôles vidéo (Timeline + Scrubber + Actions)
+        AnimatedVisibility(
+            visible = areControlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Column(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xDD064E3B))
-                    .border(1.dp, Color(0xFF10B981), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color(0xE6000000))
+                        )
+                    )
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AgnesSvgIcon(icon = AgnesIcon.CHECK, tint = Color(0xFF34D399), size = 12.dp)
-                    Spacer(modifier = Modifier.width(4.dp))
+                // Barre de scrubber temporelle
+                val progressRatio = if (durationMs > 0) (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        text = "Hors-ligne disponible",
-                        color = Color(0xFFD1FAE5),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                        text = formatMs(currentPositionMs),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Slider(
+                        value = progressRatio,
+                        onValueChange = { newRatio ->
+                            isUserScrubbing = true
+                            val targetMs = (newRatio * durationMs).toInt()
+                            currentPositionMs = targetMs
+                            videoViewRef?.seekTo(targetMs)
+                        },
+                        onValueChangeFinished = {
+                            isUserScrubbing = false
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFFA78BFA),
+                            activeTrackColor = Color(0xFF7C3AED),
+                            inactiveTrackColor = Color(0x44FFFFFF)
+                        )
+                    )
+
+                    Text(
+                        text = formatMs(durationMs),
+                        color = Color(0xFFA1A1AA),
+                        fontSize = 11.sp
                     )
                 }
-            }
-        }
 
-        // Indicateur de chargement / buffer
-        if (isBuffering) {
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xAA000000)),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Color(0xFFA78BFA), strokeWidth = 3.dp)
-            }
-        }
-
-        // Overlay commandes vidéo en bas
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .background(Color(0x99000000))
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            // Slider de progression temporelle
-            val progressRatio = if (durationMs > 0) (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = formatMs(currentPositionMs),
-                    color = Color.White,
-                    fontSize = 11.sp
-                )
-
-                Slider(
-                    value = progressRatio,
-                    onValueChange = { newRatio ->
-                        val targetMs = (newRatio * durationMs).toInt()
-                        videoViewRef?.seekTo(targetMs)
-                        currentPositionMs = targetMs
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFFA78BFA),
-                        activeTrackColor = Color(0xFF7C3AED),
-                        inactiveTrackColor = Color(0xFF3F3F46)
-                    )
-                )
-
-                Text(
-                    text = formatMs(durationMs),
-                    color = Color(0xFFA1A1AA),
-                    fontSize = 11.sp
-                )
-            }
-
-            // Boutons d'action : Play / Pause
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF7C3AED))
-                        .clickable {
-                            triggerHapticFeedback(context)
-                            videoViewRef?.let { vv ->
-                                if (vv.isPlaying) {
-                                    vv.pause()
-                                    isPlaying = false
-                                } else {
-                                    vv.start()
-                                    isPlaying = true
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center
+                // Actions de la barre de contrôle : Replay, Play/Pause, Fullscreen
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AgnesSvgIcon(
-                        icon = if (isPlaying) AgnesIcon.PAUSE else AgnesIcon.PLAY,
-                        tint = Color.White,
-                        size = 20.dp
-                    )
+                    // Replay
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1E1E28))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                videoViewRef?.seekTo(0)
+                                currentPositionMs = 0
+                                videoViewRef?.start()
+                                isPlaying = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AgnesSvgIcon(icon = AgnesIcon.GENERATE, tint = Color(0xFFBBBBD0), size = 14.dp)
+                    }
+
+                    // Play/Pause bouton compact
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF7C3AED))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                videoViewRef?.let { vv ->
+                                    if (vv.isPlaying) {
+                                        vv.pause()
+                                        isPlaying = false
+                                    } else {
+                                        vv.start()
+                                        isPlaying = true
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AgnesSvgIcon(
+                            icon = if (isPlaying) AgnesIcon.PAUSE else AgnesIcon.PLAY,
+                            tint = Color.White,
+                            size = 18.dp
+                        )
+                    }
+
+                    // Bouton Plein écran / Mode Cinéma
+                    if (onToggleFullScreen != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(if (isFullScreen) Color(0xFF4C1D95) else Color(0xFF1E1E28))
+                            .clickable {
+                                triggerHapticFeedback(context)
+                                onToggleFullScreen()
+                            },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AgnesSvgIcon(
+                                icon = if (isFullScreen) AgnesIcon.FULLSCREEN_EXIT else AgnesIcon.FULLSCREEN,
+                                tint = Color.White,
+                                size = 15.dp
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.size(32.dp))
+                    }
                 }
             }
         }
@@ -1126,9 +1364,11 @@ fun FilmPlayerView(
         )
     }
 
+    var isFullScreenFilm by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Alerte si film interrompu / partiel
-        if (film.status == "partial" || film.status == "failed") {
+        if (!isFullScreenFilm && (film.status == "partial" || film.status == "failed")) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1214,6 +1454,16 @@ fun FilmPlayerView(
                         dialogue = sceneDiag,
                         dialogueLanguage = diagLang,
                         audioMode = sceneAudioMode,
+                        charactersPresent = activeScene?.charactersPresent,
+                        isFullScreen = isFullScreenFilm,
+                        onToggleFullScreen = { isFullScreenFilm = !isFullScreenFilm },
+                        onNavigatePrevious = if (selectedSceneIndex > 0) {
+                            { selectedSceneIndex-- }
+                        } else null,
+                        onNavigateNext = if (selectedSceneIndex < scenes.size - 1) {
+                            { selectedSceneIndex++ }
+                        } else null,
+                        badgeText = if (scenes.isNotEmpty()) "PLAN ${selectedSceneIndex + 1}/${scenes.size}" + (if (isContinuousMode) " • ENCHAÎNÉ" else "") else null,
                         onComplete = {
                             if (isContinuousMode && scenes.isNotEmpty()) {
                                 if (selectedSceneIndex < scenes.size - 1) {
@@ -1230,31 +1480,37 @@ fun FilmPlayerView(
                         val sceneDiag = activeScene?.dialogue.orEmpty()
                         val isEnglishDiag = sceneDiag.contains("the ", ignoreCase = true) || sceneDiag.contains("you ", ignoreCase = true)
                         val diagLang = if (isEnglishDiag) "en" else "fr"
-                        if (sceneDiag.isNotBlank() && activeScene?.audioMode != "ambient") {
+                        val isCharSpeech = SceneItem.isCharacterSpeech(sceneDiag, activeScene?.charactersPresent)
+
+                        if (isCharSpeech && activeScene?.audioMode != "ambient") {
+                            val speakerName = SceneItem.extractCharacterSpeaker(sceneDiag)
+                            val cleanSpoken = SceneItem.extractSpokenSpeech(sceneDiag, activeScene?.charactersPresent).ifBlank { sceneDiag }
+
                             Surface(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .padding(bottom = 20.dp, start = 16.dp, end = 16.dp)
                                     .fillMaxWidth(0.92f),
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color(0xE60D0D14),
-                                border = BorderStroke(1.dp, Color(0x44FFFFFF))
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xD909090F),
+                                border = BorderStroke(0.8.dp, Color(0x44FFFFFF))
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     val isSpeakingKeyframe by AgnesVoiceManager.isSpeaking.collectAsState()
                                     Box(
                                         modifier = Modifier
-                                            .size(28.dp)
+                                            .size(24.dp)
                                             .clip(CircleShape)
-                                            .background(if (isSpeakingKeyframe) Color(0xFF6D28D9) else Color(0xFF27273A))
+                                            .background(if (isSpeakingKeyframe) Color(0xFF7C3AED) else Color(0xFF262638))
                                             .clickable {
                                                 if (isSpeakingKeyframe) {
                                                     AgnesVoiceManager.stop()
                                                 } else {
-                                                    AgnesVoiceManager.speak(context, sceneDiag, diagLang)
+                                                    val sp = SceneItem.extractSpokenSpeech(sceneDiag, activeScene?.charactersPresent)
+                                                    if (sp.isNotBlank()) AgnesVoiceManager.speak(context, sp, diagLang)
                                                 }
                                             },
                                         contentAlignment = Alignment.Center
@@ -1262,17 +1518,28 @@ fun FilmPlayerView(
                                         AgnesSvgIcon(
                                             icon = AgnesIcon.AUDIO,
                                             tint = if (isSpeakingKeyframe) Color.White else Color(0xFFA78BFA),
-                                            size = 14.dp
+                                            size = 12.dp
                                         )
                                     }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = sceneDiag,
-                                        color = Color.White,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        lineHeight = 17.sp
-                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        if (speakerName != null) {
+                                            Text(
+                                                text = speakerName.uppercase(),
+                                                color = Color(0xFFA78BFA),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                        Text(
+                                            text = cleanSpoken,
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            lineHeight = 16.sp
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1281,84 +1548,16 @@ fun FilmPlayerView(
                     EmptyMediaState(message = "Plan ${activeScene?.number ?: (selectedSceneIndex + 1)} en cours de production...")
                 }
             }
-
-            // Badge indicateur Mode Continu en haut à gauche
-            if (isContinuousMode && scenes.isNotEmpty()) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xDD111827),
-                    border = BorderStroke(1.dp, Color(0xFF8B5CF6))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF34D399))
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "LECTURE ENCHAÎNÉE • PLAN ${selectedSceneIndex + 1}/${scenes.size}",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            // Boutons de saut Plan précédent / suivant directement sur l'écran
-            if (selectedSceneIndex > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 12.dp)
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x99000000))
-                        .border(1.dp, Color(0x55FFFFFF), CircleShape)
-                        .clickable {
-                            triggerHapticFeedback(context)
-                            selectedSceneIndex--
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("‹", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-            if (selectedSceneIndex < scenes.size - 1) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 12.dp)
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x99000000))
-                        .border(1.dp, Color(0x55FFFFFF), CircleShape)
-                        .clickable {
-                            triggerHapticFeedback(context)
-                            selectedSceneIndex++
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("›", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                }
-            }
         }
 
-        // Sélecteur de scènes (Carousel de plans et Découpage)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF13131A))
-                .padding(12.dp)
-        ) {
+        // Sélecteur de scènes (Carousel de plans et Découpage) masqué en mode plein écran
+        if (!isFullScreenFilm) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF13131A))
+                    .padding(12.dp)
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1635,6 +1834,7 @@ fun FilmPlayerView(
             }
         }
     }
+}
 }
 
 @Composable

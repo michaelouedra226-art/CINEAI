@@ -62,7 +62,9 @@ enum class AgnesIcon {
     PLAY,
     PAUSE,
     SHARE,
-    AUDIO
+    AUDIO,
+    FULLSCREEN,
+    FULLSCREEN_EXIT
 }
 
 @Composable
@@ -131,6 +133,8 @@ fun AgnesSvgIcon(
                 AgnesIcon.PAUSE -> drawPause(tint, stroke)
                 AgnesIcon.SHARE -> drawShare(tint, stroke)
                 AgnesIcon.AUDIO -> drawAudio(tint, stroke)
+                AgnesIcon.FULLSCREEN -> drawFullscreen(tint, stroke)
+                AgnesIcon.FULLSCREEN_EXIT -> drawFullscreenExit(tint, stroke)
             }
         }
     }
@@ -563,5 +567,73 @@ private fun DrawScope.drawAudio(color: Color, stroke: Stroke) {
         quadraticTo(w * 0.88f, h * 0.50f, w * 0.76f, h * 0.72f)
     }
     drawPath(wave2, color, style = stroke)
+}
+
+private fun DrawScope.drawFullscreen(color: Color, stroke: Stroke) {
+    val w = size.width
+    val h = size.height
+    val cornerLen = w * 0.22f
+    // Top-Left
+    val tl = Path().apply {
+        moveTo(w * 0.15f, h * 0.15f + cornerLen)
+        lineTo(w * 0.15f, h * 0.15f)
+        lineTo(w * 0.15f + cornerLen, h * 0.15f)
+    }
+    drawPath(tl, color, style = stroke)
+    // Top-Right
+    val tr = Path().apply {
+        moveTo(w * 0.85f - cornerLen, h * 0.15f)
+        lineTo(w * 0.85f, h * 0.15f)
+        lineTo(w * 0.85f, h * 0.15f + cornerLen)
+    }
+    drawPath(tr, color, style = stroke)
+    // Bottom-Left
+    val bl = Path().apply {
+        moveTo(w * 0.15f, h * 0.85f - cornerLen)
+        lineTo(w * 0.15f, h * 0.85f)
+        lineTo(w * 0.15f + cornerLen, h * 0.85f)
+    }
+    drawPath(bl, color, style = stroke)
+    // Bottom-Right
+    val br = Path().apply {
+        moveTo(w * 0.85f - cornerLen, h * 0.85f)
+        lineTo(w * 0.85f, h * 0.85f)
+        lineTo(w * 0.85f, h * 0.85f - cornerLen)
+    }
+    drawPath(br, color, style = stroke)
+}
+
+private fun DrawScope.drawFullscreenExit(color: Color, stroke: Stroke) {
+    val w = size.width
+    val h = size.height
+    val cornerLen = w * 0.20f
+    // Top-Left converging
+    val tl = Path().apply {
+        moveTo(w * 0.15f, h * 0.35f)
+        lineTo(w * 0.35f, h * 0.35f)
+        lineTo(w * 0.35f, h * 0.15f)
+    }
+    drawPath(tl, color, style = stroke)
+    // Top-Right converging
+    val tr = Path().apply {
+        moveTo(w * 0.85f, h * 0.35f)
+        lineTo(w * 0.65f, h * 0.35f)
+        lineTo(w * 0.65f, h * 0.15f)
+    }
+    drawPath(tr, color, style = stroke)
+    // Bottom-Left converging
+    val bl = Path().apply {
+        moveTo(w * 0.15f, h * 0.65f)
+        lineTo(w * 0.35f, h * 0.65f)
+        lineTo(w * 0.35f, h * 0.85f)
+    }
+    drawPath(bl, color, style = stroke)
+    // Bottom-Right converging
+    val br = Path().apply {
+        moveTo(w * 0.85f, h * 0.65f)
+        lineTo(w * 0.65f, h * 0.65f)
+        lineTo(w * 0.65f, h * 0.85f)
+    }
+    drawPath(br, color, style = stroke)
 }
 

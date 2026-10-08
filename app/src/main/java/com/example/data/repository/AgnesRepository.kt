@@ -884,7 +884,7 @@ class AgnesRepository(
                 ", silent human scene with authentic room tone and environment acoustics: $soundTrack, no spoken lines"
             }
             dialogueLanguage == "fr" -> {
-                val cleanSpeech = SceneItem.extractSpokenSpeech(scene.dialogue)
+                val cleanSpeech = SceneItem.extractSpokenSpeech(scene.dialogue, scene.charactersPresent)
                 if (cleanSpeech.isNotBlank()) {
                     ", authentic spoken French dialogue, single delivery without repetition: \"$cleanSpeech\", natural conversational French cadence, authentic human voice, synchronous lip sync, actor delivers line once and stops speaking, natural room acoustics: $soundTrack, no English words"
                 } else {
@@ -892,7 +892,7 @@ class AgnesRepository(
                 }
             }
             else -> {
-                val cleanSpeech = SceneItem.extractSpokenSpeech(scene.dialogue)
+                val cleanSpeech = SceneItem.extractSpokenSpeech(scene.dialogue, scene.charactersPresent)
                 if (cleanSpeech.isNotBlank()) {
                     ", authentic spoken English dialogue, single delivery without repetition: \"$cleanSpeech\", natural conversational cadence, synchronous lip movement, actor delivers line once, natural acoustics: $soundTrack"
                 } else {

@@ -205,14 +205,61 @@ data class SceneItem(
             return array.toString()
         }
 
-        fun extractSpokenSpeech(rawDialogue: String): String {
-            var cleaned = rawDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
+        fun isCharacterSpeech(rawDialogue: String?, charactersPresent: String? = null): Boolean {
+            if (rawDialogue.isNullOrBlank()) return false
+            val trimmed = rawDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
+            if (trimmed.isBlank()) return false
+
+            // Si la scène est un décor/environnement sans personnage
+            if (!charactersPresent.isNullOrBlank()) {
+                val cp = charactersPresent.lowercase()
+                if (cp.contains("décor") || cp.contains("environnement") || cp.contains("aucun") || cp.contains("paysage")) {
+                    return false
+                }
+            }
+
+            // Exclusion formelle des voix off, narrateurs ou descriptions extérieures
+            val colonIndex = trimmed.indexOf(':')
+            if (colonIndex in 1..30) {
+                val speaker = trimmed.substring(0, colonIndex).trim().lowercase()
+                if (speaker == "voix off" || speaker == "voix-off" || speaker == "voice over" ||
+                    speaker == "voice-over" || speaker == "narrateur" || speaker == "narrator" ||
+                    speaker == "voix" || speaker == "description") {
+                    return false
+                }
+            } else {
+                val lower = trimmed.lowercase()
+                if (lower.startsWith("voix off") || lower.startsWith("voix-off") ||
+                    lower.startsWith("voice over") || lower.startsWith("voice-over") ||
+                    lower.startsWith("narrateur") || lower.startsWith("narrator")) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        fun extractCharacterSpeaker(rawDialogue: String): String? {
+            val cleaned = rawDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
             val colonIndex = cleaned.indexOf(':')
             if (colonIndex in 1..30) {
                 val speaker = cleaned.substring(0, colonIndex).trim()
-                if (!speaker.contains(" ") || speaker.equals("Voix off", ignoreCase = true) || speaker.equals("Voice over", ignoreCase = true)) {
-                    cleaned = cleaned.substring(colonIndex + 1).trim()
+                val speakerLower = speaker.lowercase()
+                if (speakerLower != "voix off" && speakerLower != "voix-off" &&
+                    speakerLower != "voice over" && speakerLower != "voice-over" &&
+                    speakerLower != "narrateur" && speakerLower != "narrator" &&
+                    speakerLower != "description") {
+                    return speaker
                 }
+            }
+            return null
+        }
+
+        fun extractSpokenSpeech(rawDialogue: String, charactersPresent: String? = null): String {
+            if (!isCharacterSpeech(rawDialogue, charactersPresent)) return ""
+            var cleaned = rawDialogue.replace("«", "").replace("»", "").replace("\"", "").trim()
+            val colonIndex = cleaned.indexOf(':')
+            if (colonIndex in 1..30) {
+                cleaned = cleaned.substring(colonIndex + 1).trim()
             }
             return cleaned
         }

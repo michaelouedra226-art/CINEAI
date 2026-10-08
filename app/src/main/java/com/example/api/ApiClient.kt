@@ -533,10 +533,10 @@ class ApiClient(
                 - Si subject_focus est ACTION : Décrire les deux silhouettes en combat physique intense avec mouvement cinétique et impact.
 
                 3. SYSTÈME DE PAROLES & DIALOGUES CINÉMATOGRAPHIQUES :
-                - RÈGLE ABSOLUE : Les personnages doivent OBLIGATOIREMENT parler dès que des dialogues ou une voix off sont demandés !
-                - Si le plan montre un ou plusieurs personnages : attribuer OBLIGATOIREMENT une réplique parlée percutante, humaine et incarnée dans 'dialogue' (ex: « Elena : Regarde ce qui nous attend. » ou « Marcus : Reste vigilant ! »).
-                - Si le plan est un décor/environnement pur ou une ouverture : insérer une réplique de voix off narrative (ex: « Voix off : L'aube se levait sur la cité silencieuse... »).
-                - INTERDICTION ABSOLUE de renvoyer une chaîne vide pour 'dialogue' si le mode n'est pas 'ambient'.
+                - RÈGLE ABSOLUE : Seuls les PERSONNAGES physiques et présents dans la scène doivent parler !
+                - Si le plan montre un ou plusieurs personnages (Protagoniste, Antagoniste, Second rôle, etc.) : attribuer une réplique parlée incarnée et percutante dans 'dialogue' préfixée par le nom du personnage (ex: « Elena : Regarde ce qui nous attend. » ou « Marcus : Reste vigilant ! »).
+                - Si le plan est un décor, un paysage, un plan d'ensemble panoramique ou une scène sans personnage : laisser 'dialogue' strictement VIDE ("").
+                - INTERDICTION ABSOLUE de générer des voix off narratives, des narrateurs hors-champ ou des descriptions lues par une voix externe.
                 $langRule
                 $audioRule
 
@@ -676,8 +676,6 @@ class ApiClient(
                             val camMovement = sObj.optString("camera", sObj.optString("camera_movement", "Travelling avant"))
                             val rawSoundDesign = sObj.optString("sound_design", sObj.optString("audio_ambiance", "Ambiance sonore cinématographique immersive"))
                             val soundDesign = rawSoundDesign.ifBlank { "Ambiance sonore studio et nappe orchestrale" }
-                            val enforcedDialogue = enforceCleanDialogue(rawDiag, actionDesc, dialogueLanguage, audioPresence, targetNum)
-
                             val charsPresent = sObj.optString("characters_present", sObj.optString("characters", ""))
                             val defaultAct = when {
                                 targetNum <= (numScenes * 0.25).toInt().coerceAtLeast(1) -> "INTRODUCTION"
@@ -695,6 +693,8 @@ class ApiClient(
                                 charsPresent.contains("paysage", ignoreCase = true) ||
                                 charsPresent.contains("monde", ignoreCase = true) ||
                                 (targetNum == 1 && (shotType.contains("ensemble", ignoreCase = true) || shotType.contains("panoramique", ignoreCase = true)))
+
+                            val enforcedDialogue = enforceCleanDialogue(rawDiag, actionDesc, dialogueLanguage, audioPresence, targetNum, isCharacterPresent = !isEnvironment)
 
                             val isAntagonist = !isEnvironment && (
                                 subjectFocus == "ANTAGONIST" ||
@@ -832,12 +832,11 @@ class ApiClient(
                             }
                             val fallbackDesc = "Progression dramatique ($defaultAct) - Plan $nextNum"
                             val fallbackSound = "Nappe sonore sobre, acoustique naturelle du lieu et foley discret"
-                            val fallbackDialogue = enforceCleanDialogue("", fallbackDesc, dialogueLanguage, audioPresence, nextNum)
-
                             val isEnv = nextNum == 1 || nextNum % 5 == 1
                             val isCounter = nextNum % 4 == 2 && supportingCastBible.isNotBlank()
                             val isAntag = nextNum % 4 == 3 && antagonistBible.isNotBlank()
                             val isAction = nextNum % 4 == 0
+                            val fallbackDialogue = if (isEnv) "" else enforceCleanDialogue("", fallbackDesc, dialogueLanguage, audioPresence, nextNum, isCharacterPresent = true)
                             val fallbackAnchor = when {
                                 isEnv -> ""
                                 isCounter -> "[Supporting: $supportingCastBible]"
@@ -901,12 +900,11 @@ class ApiClient(
                         else -> "CONCLUSION"
                     }
                     val fallbackDesc = "Développement de l'intrigue ($defaultAct) - Plan $n"
-                    val fallbackDialogue = enforceCleanDialogue("", fallbackDesc, dialogueLanguage, audioPresence, n)
-
                     val isNoCharFallback = n == 1 || n % 5 == 1
                     val isCounterFallback = !isNoCharFallback && n % 4 == 2 && supportingCastBible.isNotBlank()
                     val isAntagFallback = !isNoCharFallback && n % 4 == 3 && antagonistBible.isNotBlank()
                     val isActionFallback = !isNoCharFallback && n % 4 == 0
+                    val fallbackDialogue = if (isNoCharFallback) "" else enforceCleanDialogue("", fallbackDesc, dialogueLanguage, audioPresence, n, isCharacterPresent = true)
                     val fallbackAnchor = when {
                         isNoCharFallback -> ""
                         isCounterFallback -> "[Supporting: $supportingCastBible]"
@@ -967,34 +965,29 @@ class ApiClient(
         description: String,
         language: String,
         audioMode: String,
-        sceneNum: Int
+        sceneNum: Int,
+        isCharacterPresent: Boolean = true
     ): String {
-        if (audioMode == "ambient") return ""
+        if (audioMode == "ambient" || !isCharacterPresent) return ""
         val trimmed = raw.trim()
 
         // Si une réplique a été écrite par le modèle ou l'utilisateur (non vide et non "null")
         if (trimmed.isNotBlank() && !trimmed.equals("null", ignoreCase = true)) {
             val clean = trimmed.replace("«", "").replace("»", "").replace("\"", "").trim()
             if (clean.isNotBlank()) {
+                // Exclusion formelle des narrateurs ou voix off
+                val cleanLower = clean.lowercase()
+                if (cleanLower.startsWith("voix off") || cleanLower.startsWith("voix-off") ||
+                    cleanLower.startsWith("voice over") || cleanLower.startsWith("voice-over") ||
+                    cleanLower.startsWith("narrateur") || cleanLower.startsWith("narrator")) {
+                    return ""
+                }
                 return if (language == "fr") "« $clean »" else "\"$clean\""
             }
         }
 
-        // Si le modèle a omis le dialogue alors que le mode audio exige des paroles, générer une narration contextuelle
-        val cleanDesc = description.replace(Regex("""^Plan\s+\d+\s*:\s*""", RegexOption.IGNORE_CASE), "").trim()
-        return if (language == "fr") {
-            if (audioMode == "voice_over" || sceneNum == 1) {
-                "« Voix off : $cleanDesc »"
-            } else {
-                "« Narrateur : $cleanDesc »"
-            }
-        } else {
-            if (audioMode == "voice_over" || sceneNum == 1) {
-                "\"Voice-over: $cleanDesc\""
-            } else {
-                "\"Narrator: $cleanDesc\""
-            }
-        }
+        // Pas de réplique de personnage disponible : renvoyer chaîne vide (jamais de voix off artificielle)
+        return ""
     }
 
     /**
