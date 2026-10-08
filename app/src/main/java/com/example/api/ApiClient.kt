@@ -468,15 +468,14 @@ class ApiClient(
         var visualConsistency = ""
 
         val langRule = if (dialogueLanguage == "fr") {
-            "DIALOGUES EN FRANÇAIS OBLIGATOIRES : Chaque scène DOIT avoir une réplique parlée ou une phrase de voix off en français complet dans 'dialogue', entre guillemets « ... ». Interdiction d'anglais et interdiction de réplique vide. Indique qui parle quand c'est pertinent (ex: « Elena : Attention ! »)."
+            "DIALOGUES EN FRANÇAIS OBLIGATOIRES : Si un personnage physique est visible à l'écran, il s'exprime en français percutant dans 'dialogue', entre guillemets avec son nom (« Nom : Réplique »). Si le plan est un décor ou sans personnage, 'dialogue' doit être strictement VIDE (\"\"). AUCUNE voix off, AUCUN narrateur externe, AUCUN anglais."
         } else {
-            "ENGLISH SPOKEN DIALOGUE: Every scene must have a spoken dialogue or voice-over in English in 'dialogue'."
+            "ENGLISH SPOKEN DIALOGUE: Physical characters present speak natural English in 'dialogue' (\"Name: line\"). Pure environment or non-character shots must have 'dialogue' completely empty (\"\"). No voice-over, no external narrator."
         }
 
         val audioRule = when (audioPresence) {
-            "voice_over" -> "Voix off narrative continue en français pour chaque scène dans 'dialogue'."
-            "ambient" -> "Mode muet/sound design : laisser 'dialogue' vide."
-            else -> "Dialogues parlés vifs entre les personnages en français dans 'dialogue'."
+            "ambient" -> "Mode atmosphérique/sound design : laisser 'dialogue' vide (\"\")."
+            else -> "Dialogues parlés directs et incarnés entre les personnages uniquement."
         }
 
         TechnicalLogManager.log("PHASE_1", "POST $AGNES_CHAT_URL - Écriture scénario studio ($numScenes scènes en $totalBatches lot(s), langue: $dialogueLanguage)")
@@ -501,12 +500,23 @@ class ApiClient(
                 Tu es un réalisateur et directeur de la photographie de cinéma de niveau mondial (Denis Villeneuve, Roger Deakins, Christopher Nolan, Ridley Scott).
                 Tu réalises le découpage technique cinématographique complet (Storyboard) d'un film.
 
-                RÈGLE D'OR : FIDÉLITÉ ABSOLUE AU SCRIPT ET AUX INDICATIONS DE L'UTILISATEUR
+                RÈGLE SUPRÊME N°1 : FIDÉLITÉ ABSOLUE AU SCRIPT ET AUX INDICATIONS DE L'UTILISATEUR
                 Si l'utilisateur a fourni un scénario, des scènes détaillées, des actions ou des répliques :
-                TU DOIS RESPECTER STRICTEMENT CE SCRIPT. Tu ne dévies pas de l'histoire de l'utilisateur. Chaque plan doit transcrire fidèlement les lieux, les personnages et les événements demandés.
+                TU DOIS RESPECTER STRICTEMENT CE SCRIPT. Tu ne dévies pas de l'histoire de l'utilisateur. Chaque plan doit transcrire fidèlement les lieux, les personnages et les événements demandés par l'utilisateur.
+
+                RÈGLE SUPRÊME N°2 : PROGRESSION DRAMATIQUE LINÉAIRE STRICTE - INTERDICTION FORMELLE DE RÉPÉTITION
+                - Chaque plan doit faire AVANCER l'histoire chronologiquement et logiquement : Événement A -> Conséquence B -> Événement C -> Climax D -> Résolution E.
+                - INTERDICTION FORMELLE de boucler, de faire bégayer l'action, ou de régénérer la même situation sous des angles différents.
+                - Deux plans consécutifs NE DOIVENT JAMAIS avoir la même action, le même enjeu ni le même contenu visuel.
+                - Quand une action est accomplie au plan N (ex: un personnage entre dans une pièce, dégaine une arme, ou prononce un serment), le plan N+1 montre la RÉACTION immédiate ou l'action SUIVANTE, jamais la répétition de l'entrée ou du dégagement.
+
+                RÈGLE SUPRÊME N°3 : CONTINUITÉ ET ADHÉRENCE VISUELLE DES PERSONNAGES
+                - Dès le premier plan, définis précisément dans 'protagonist_bible', 'supporting_cast_bible' et 'antagonist_bible' les caractéristiques vestimentaires et physiques EXACTES demandées par l'utilisateur dans son prompt.
+                - N'invente JAMAIS un archétype générique par défaut si l'utilisateur a spécifié des détails (âge, tenue, couleurs, coiffure, accessoires, époque).
+                - Réutilise ces bibles textuellement dans chaque champ 'image_prompt' approprié pour garantir une cohérence visuelle parfaite sans dérive.
 
                 GRAMMAIRE DU DÉCOUPAGE CINÉMATOGRAPHIQUE DE STUDIO :
-                Un film n'est JAMAIS une succession de plans moyens d'une seule personne. La cinématographie repose sur une alternance rigoureuse d'échelles et de points de vue :
+                Un film n'est JAMAIS une succession monotone de plans moyens d'une seule personne. La cinématographie repose sur une alternance rigoureuse d'échelles et de points de vue :
                 1. Plan d'ensemble (Extreme Wide / Establishing Shot) : Installe le monde, le décor (village, forteresse, nature, rue nocturne), l'ambiance et la météo. AUCUN gros plan de personnage.
                 2. Plan de situation / Plan large (Wide Shot) : Montre les personnages DANS leur environnement avec de la perspective spatiale.
                 3. Champ / Contre-champ (Reverse Angle) : Quand un personnage marche vers un autre ou parle, le plan suivant COUPE OBLIGATOIREMENT sur l'autre personnage qui l'attend ou réagit.
@@ -525,14 +535,14 @@ class ApiClient(
 
                 CONSTRUCTION DU 'image_prompt' POUR CHAQUE PLAN (EN ANGLAIS) :
                 Le champ 'image_prompt' est transmis directement au générateur d'images pour créer l'image clé du plan.
-                Il DOIT être précis, photographique, et décrire UNIQUEMENT ce qui est visible dans ce plan précis :
+                Il DOIT être précis, photographique, et décrire UNIQUEMENT ce qui est visible dans ce plan précis en intégrant fidèlement les descriptions des bibles de personnages :
                 - Indiquer le cadrage : "Cinematic extreme wide establishing shot of...", "Cinematic medium close-up reverse shot of...", "Dynamic wide angle action two-shot of..."
                 - Si subject_focus est ENVIRONMENT : Décrire uniquement le lieu, les textures, l'éclairage, avec la mention explicite "vast panoramic scale, no people in frame".
                 - Si subject_focus est ANTAGONIST : Décrire l'antagoniste (visage, costume sombre, arme, posture menaçante), sans jamais mentionner le protagoniste.
                 - Si subject_focus est SUPPORTING : Décrire l'allié ou le second personnage en action ou en réaction.
                 - Si subject_focus est ACTION : Décrire les deux silhouettes en combat physique intense avec mouvement cinétique et impact.
 
-                3. SYSTÈME DE PAROLES & DIALOGUES CINÉMATOGRAPHIQUES :
+                SYSTÈME DE PAROLES & DIALOGUES CINÉMATOGRAPHIQUES :
                 - RÈGLE ABSOLUE : Seuls les PERSONNAGES physiques et présents dans la scène doivent parler !
                 - Si le plan montre un ou plusieurs personnages (Protagoniste, Antagoniste, Second rôle, etc.) : attribuer une réplique parlée incarnée et percutante dans 'dialogue' préfixée par le nom du personnage (ex: « Elena : Regarde ce qui nous attend. » ou « Marcus : Reste vigilant ! »).
                 - Si le plan est un décor, un paysage, un plan d'ensemble panoramique ou une scène sans personnage : laisser 'dialogue' strictement VIDE ("").
@@ -541,7 +551,7 @@ class ApiClient(
                 $audioRule
 
                 PERSONNAGES & CONTINUITÉ :
-                - 'protagonist_bible' : Nom + apparence physique, tenue et détails visuels uniques du héros.
+                - 'protagonist_bible' : Nom + apparence physique, tenue et détails visuels uniques du héros (extraits fidèlement de la demande).
                 - 'supporting_cast_bible' : Nom + physique et tenue du second personnage / allié.
                 - 'antagonist_bible' : Nom + silhouette, visage et tenue de l'adversaire ou menace.
                 - 'visual_consistency' : Style $style, grain argentique Kodak 35mm, éclairage diégétique réaliste.
@@ -562,9 +572,9 @@ class ApiClient(
                       "subject_focus": "ENVIRONMENT ou PROTAGONIST ou ANTAGONIST ou SUPPORTING ou DUO ou ACTION",
                       "characters_present": "Décor / Ambiance ou Protagoniste ou Antagoniste ou Secondaire ou Duo",
                       "title": "Titre du plan",
-                      "action": "Description dynamique de la scène",
-                      "image_prompt": "Cinematic visual prompt in English (camera shot scale, lighting, specific subjects in frame)",
-                      "dialogue": "« Réplique ou voix off » (ou vide si muet)",
+                      "action": "Description dynamique de la progression narrative (pas de répétition)",
+                      "image_prompt": "Cinematic visual prompt in English (camera shot scale, lighting, specific subjects in frame conforming to character bibles)",
+                      "dialogue": "« Nom : Réplique vivante » (ou vide si muet/décor)",
                       "sound_design": "Acoustique du lieu et foley",
                       "camera": "Travelling / Panoramique / Caméra épaule / Plan fixe"
                     }
@@ -575,18 +585,19 @@ class ApiClient(
             } else {
                 """
                 Tu es un réalisateur de cinéma de renommée mondiale. Poursuis le découpage technique du film "$filmTitle".
-                CONTINUITÉ VISUELLE :
+                CONTINUITÉ VISUELLE STRICTE :
                 - Protagoniste : "$protagonistBible"
                 - Allié / Secondaire : "$supportingCastBible"
                 - Antagoniste : "$antagonistBible"
                 - Style visuel : "$visualConsistency"
                 Dernier plan tourné (Plan ${allDrafts.lastOrNull()?.number ?: (startScene - 1)}) : "${allDrafts.lastOrNull()?.title}" - "${allDrafts.lastOrNull()?.description}".
 
-                RÈGLE SUPRÊME : Suis fidèlement le scénario et les scènes de l'utilisateur.
-                VARIÉTÉ DE PLANS OBLIGATOIRE (DÉCOUPAGE TECHNIQUE STUDIO) :
-                - Ne jamais enchaîner deux plans identiques sur le même sujet.
-                - Alterne plans larges, contre-champs sur l'interlocuteur, gros plans d'intensité, duels martiaux à deux et plans sur l'antagoniste.
-                - Pour chaque plan, définis obligatoirement 'subject_focus' ("ENVIRONMENT", "ANTAGONIST", "SUPPORTING", "DUO", "ACTION", "PROTAGONIST") et rédige un 'image_prompt' anglais autonome et précis centré UNIQUEMENT sur ce sujet.
+                RÈGLES IMPÉRATIVES DE PROGRESSION & NON-RÉPÉTITION :
+                - Poursuis immédiatement l'action chronologique APRÈS ce dernier plan tourné.
+                - INTERDICTION ABSOLUE de répéter l'action du plan précédent ou de faire du surplace narratif.
+                - Chaque plan doit faire franchir une nouvelle étape au scénario : découverte, confrontation, montée de tension, résolution.
+                - VARIÉTÉ DE PLANS STUDIO : alterne contre-champs, gros plans d'intensité, duels et plans larges.
+                - Définis obligatoirement 'subject_focus' ("ENVIRONMENT", "ANTAGONIST", "SUPPORTING", "DUO", "ACTION", "PROTAGONIST") et rédige un 'image_prompt' anglais autonome et précis centré UNIQUEMENT sur ce sujet intégrant les bibles visuelles.
                 $langRule
                 $audioRule
 
@@ -600,9 +611,9 @@ class ApiClient(
                       "subject_focus": "SUPPORTING ou ANTAGONIST ou ACTION ou DUO ou PROTAGONIST ou ENVIRONMENT",
                       "characters_present": "Secondaire ou Antagoniste ou Duo ou Protagoniste",
                       "title": "Titre court",
-                      "action": "Description dynamique de l'action",
-                      "image_prompt": "Cinematic visual prompt in English (camera angle, lighting, specific subjects in frame)",
-                      "dialogue": "« Réplique vivante en français » (ou vide si muet)",
+                      "action": "Description de la NOUVELLE étape de l'action narrative",
+                      "image_prompt": "Cinematic visual prompt in English conforming to character bibles",
+                      "dialogue": "« Nom : Réplique vivante » (ou vide si muet/décor)",
                       "sound_design": "Foley et ambiance du lieu",
                       "camera": "Mouvement de caméra cinématographique"
                     }
@@ -618,6 +629,7 @@ class ApiClient(
                 append("\n\nStyle visuel souhaité : ").append(style)
                 append("\nGénère le découpage technique pour les plans $startScene à $endScene (sur un total de $numScenes plans).")
                 append("\nSuis fidèlement la trame narrative, les décors, les personnages et les dialogues écrits par l'utilisateur.")
+                append("\nASSURE UNE PROGRESSION STRICTEMENT CHRONOLOGIQUE SANS AUCUNE RÉPÉTITION DE SCÈNES.")
             }
 
             var batchSuccess = false
@@ -770,15 +782,31 @@ class ApiClient(
 
                             val rawImagePrompt = sObj.optString("image_prompt", "").trim()
                             val unifiedImagePrompt = if (rawImagePrompt.isNotBlank()) {
+                                val anchorSuffix = when {
+                                    isEnvironment -> ""
+                                    isAntagonist && antagonistBible.isNotBlank() && !rawImagePrompt.contains(antagonistBible.take(20), ignoreCase = true) -> ", featuring $antagonistBible"
+                                    (isSupporting || isCounterShot) && supportingCastBible.isNotBlank() && !rawImagePrompt.contains(supportingCastBible.take(20), ignoreCase = true) -> ", featuring $supportingCastBible"
+                                    isCombat -> {
+                                        val clash = if (antagonistBible.isNotBlank()) "$protagonistBible versus $antagonistBible" else protagonistBible
+                                        if (!rawImagePrompt.contains(protagonistBible.take(20), ignoreCase = true)) ", featuring $clash" else ""
+                                    }
+                                    isDuo -> {
+                                        val duoChars = if (supportingCastBible.isNotBlank()) "$protagonistBible and $supportingCastBible" else "$protagonistBible and $antagonistBible"
+                                        if (!rawImagePrompt.contains(protagonistBible.take(20), ignoreCase = true)) ", featuring $duoChars" else ""
+                                    }
+                                    protagonistBible.isNotBlank() && !rawImagePrompt.contains(protagonistBible.take(20), ignoreCase = true) -> ", featuring $protagonistBible"
+                                    else -> ""
+                                }
                                 if (isEnvironment) {
                                     "$rawImagePrompt, shot on 35mm film, Kodak Vision3, natural diégétic lighting, atmospheric cinematic depth, 9:16 vertical format"
                                 } else {
-                                    "$rawImagePrompt, shot on 35mm film, Kodak Vision3, natural realistic lighting, cinematic depth of field, 9:16 vertical format"
+                                    "$rawImagePrompt$anchorSuffix, shot on 35mm film, Kodak Vision3, natural realistic lighting, cinematic depth of field, 9:16 vertical format"
                                 }
                             } else if (isEnvironment) {
                                 "Cinematic establishing wide shot of $actionDesc, vast atmospheric depth, architectural and natural panorama, no people in frame, shot on 35mm film, Kodak Vision3, 9:16 vertical format"
                             } else if (isCombat) {
-                                "Dynamic martial action combat scene, wide angle action choreography, $actionDesc, two fighters in intense physical clash, fluid motion, dramatic rim lighting, shot on 35mm film, 9:16 vertical format"
+                                val fighters = if (antagonistBible.isNotBlank()) "$protagonistBible and $antagonistBible" else protagonistBible
+                                "Dynamic martial action combat scene, wide angle action choreography, $actionDesc, featuring $fighters in intense physical clash, fluid motion, dramatic rim lighting, shot on 35mm film, 9:16 vertical format"
                             } else if (isAntagonist) {
                                 val antagDesc = if (antagonistBible.isNotBlank()) antagonistBible else "menacing antagonist figure"
                                 "Cinematic low angle medium shot of $antagDesc, $actionDesc, dramatic rim lighting, intense gaze, shot on 35mm film, 9:16 vertical format"
@@ -786,7 +814,8 @@ class ApiClient(
                                 val suppDesc = if (supportingCastBible.isNotBlank()) supportingCastBible else "secondary character"
                                 "Cinematic reverse angle medium close-up of $suppDesc, $actionDesc, intense gaze and natural expression, shot on 35mm film, 9:16 vertical format"
                             } else if (isDuo) {
-                                "Cinematic two-shot framing, $actionDesc, two figures in intense dramatic interaction, spatial tension, shot on 35mm film, 9:16 vertical format"
+                                val duoDesc = if (supportingCastBible.isNotBlank()) "$protagonistBible and $supportingCastBible" else "$protagonistBible and $antagonistBible"
+                                "Cinematic two-shot framing, $actionDesc, featuring $duoDesc in intense dramatic interaction, spatial tension, shot on 35mm film, 9:16 vertical format"
                             } else {
                                 "Cinematic medium shot of $protagonistBible, $actionDesc, natural realistic lighting, shot on 35mm film, 9:16 vertical format"
                             }
