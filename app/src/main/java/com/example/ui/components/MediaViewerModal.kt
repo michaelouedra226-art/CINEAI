@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -80,6 +81,7 @@ import kotlinx.coroutines.delay
 fun MediaViewerModal(
     creation: CreationEntity?,
     film: FilmEntity? = null,
+    initialSceneIndex: Int = 0,
     onDismiss: () -> Unit,
     onToggleFavorite: ((String, Boolean) -> Unit)? = null,
     onToggleFilmFavorite: ((String, Boolean) -> Unit)? = null,
@@ -311,6 +313,7 @@ fun MediaViewerModal(
                         isFilm -> {
                             FilmPlayerView(
                                 film = film!!,
+                                initialSceneIndex = initialSceneIndex,
                                 onResumeFilm = onResumeFilm,
                                 onRestartFilm = onRestartFilm,
                                 onDeleteFilm = onDeleteFilm,
@@ -970,6 +973,7 @@ fun VideoPlayerComponent(
 @Composable
 fun FilmPlayerView(
     film: FilmEntity,
+    initialSceneIndex: Int = 0,
     onResumeFilm: ((String) -> Unit)? = null,
     onRestartFilm: ((String) -> Unit)? = null,
     onDeleteFilm: ((String) -> Unit)? = null,
@@ -983,7 +987,17 @@ fun FilmPlayerView(
         SceneItem.parseList(film.scenesJson)
     }
 
-    var selectedSceneIndex by remember { mutableIntStateOf(0) }
+    val safeInitialIndex = remember(scenes, initialSceneIndex) {
+        if (scenes.isNotEmpty()) initialSceneIndex.coerceIn(0, scenes.size - 1) else 0
+    }
+    var selectedSceneIndex by remember { mutableIntStateOf(safeInitialIndex) }
+    val carouselListState = rememberLazyListState(initialFirstVisibleItemIndex = safeInitialIndex)
+
+    LaunchedEffect(selectedSceneIndex) {
+        if (scenes.isNotEmpty() && selectedSceneIndex in scenes.indices) {
+            carouselListState.animateScrollToItem(selectedSceneIndex)
+        }
+    }
     val activeScene = scenes.getOrNull(selectedSceneIndex)
     var showFullDecoupage by remember { mutableStateOf(false) }
 
@@ -1674,6 +1688,7 @@ fun FilmPlayerView(
 
             if (!showFullDecoupage) {
                 LazyRow(
+                    state = carouselListState,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {

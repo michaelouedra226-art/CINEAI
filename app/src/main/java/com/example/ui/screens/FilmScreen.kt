@@ -215,9 +215,11 @@ fun FilmScreen(
         val sc = selectedSceneForPreview!!
         val isVideo = !sc.videoUrl.isNullOrBlank()
         if (currentFilm != null) {
+            val sceneIdx = (sc.number - 1).coerceAtLeast(0)
             MediaViewerModal(
                 creation = null,
                 film = currentFilm,
+                initialSceneIndex = sceneIdx,
                 onDismiss = { selectedSceneForPreview = null },
                 onResumeFilm = onResumeFilm,
                 onReshootScene = onReshootScene,
