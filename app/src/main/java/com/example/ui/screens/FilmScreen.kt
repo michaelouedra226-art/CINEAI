@@ -2267,19 +2267,27 @@ fun FilmScreen(
                                     currentWorkflowStep = FilmWorkflowStep.DECOUPAGE
                                 }
                             } else {
-                                // Fallback structuré local
+                                // Fallback structuré lié fidèlement au prompt utilisateur
+                                val styleSuffix = if (selectedStyle.isNotBlank()) ", $selectedStyle aesthetic" else ""
                                 draftScenes = (1..count).map { idx ->
+                                    val actName = when {
+                                        idx <= (count * 0.25).toInt().coerceAtLeast(1) -> "Introduction"
+                                        idx <= (count * 0.70).toInt().coerceAtLeast(2) -> "Développement"
+                                        idx <= (count * 0.85).toInt().coerceAtLeast(3) -> "Climax"
+                                        else -> "Résolution"
+                                    }
+                                    val actionForPlan = "Étape $idx ($actName) : $filmPrompt"
                                     SceneItem(
                                         number = idx,
-                                        title = "Plan $idx",
-                                        description = "Plan $idx de la séquence $filmTitle",
-                                        image_prompt = "Cinematic shot for scene $idx, style $selectedStyle, 9:16 vertical format, 35mm film",
-                                        video_prompt = "Cinematic camera movement, scene $idx",
-                                        camera_movement = "Travelling fluide",
+                                        title = "Plan $idx : Séquence $actName",
+                                        description = actionForPlan,
+                                        image_prompt = "$filmPrompt, sequence progression step $idx ($actName)$styleSuffix, 9:16 vertical format",
+                                        video_prompt = "Smooth cinematic camera motion, $filmPrompt, step $idx, continuous motion",
+                                        camera_movement = if (idx % 2 == 0) "Contre-champ fluide" else "Travelling avant",
                                         status = "pending",
                                         dialogue = "",
                                         audioMode = selectedAudioPresence,
-                                        soundDesign = "Nappe orchestrale cinématique et sound design immersif"
+                                        soundDesign = "Acoustique naturelle diégétique et sound design cinématique"
                                     )
                                 }
                                 isPreparingDrafts = false
