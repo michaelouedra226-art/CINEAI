@@ -72,7 +72,6 @@ import com.example.data.model.FilmEntity
 import com.example.data.model.SceneItem
 import com.example.ui.svg.AgnesIcon
 import com.example.ui.svg.AgnesSvgIcon
-import com.example.util.AgnesVoiceManager
 import com.example.util.DownloadHelper
 import com.example.util.OfflineVideoManager
 import kotlinx.coroutines.delay
@@ -789,47 +788,6 @@ fun VideoPlayerComponent(
             }
         }
 
-        // Sous-titres cinématiques : UNIQUEMENT pour les personnages, positionnés au-dessus des commandes
-        if (isTrueCharacterSpeech && audioMode != "ambient") {
-            val speakerName = SceneItem.extractCharacterSpeaker(dialogue.orEmpty())
-            val speechContent = SceneItem.extractSpokenSpeech(dialogue.orEmpty(), charactersPresent).ifBlank { dialogue.orEmpty() }
-
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(
-                        bottom = if (areControlsVisible) 78.dp else 22.dp,
-                        start = 16.dp,
-                        end = 16.dp
-                    )
-                    .fillMaxWidth(0.92f),
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xD909090F),
-                border = BorderStroke(0.8.dp, Color(0x44FFFFFF))
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    if (speakerName != null) {
-                        Text(
-                            text = speakerName.uppercase(),
-                            color = Color(0xFFA78BFA),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                    Text(
-                        text = speechContent,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = 16.sp
-                    )
-                }
-            }
-        }
-
         // Overlay inférieur des contrôles vidéo (Timeline + Scrubber + Actions)
         AnimatedVisibility(
             visible = areControlsVisible,
@@ -1457,72 +1415,6 @@ fun FilmPlayerView(
                 } else if (!keyframeUrl.isNullOrBlank()) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         ImageViewerWithZoom(imageUrl = keyframeUrl)
-                        val sceneDiag = activeScene?.dialogue.orEmpty()
-                        val isEnglishDiag = sceneDiag.contains("the ", ignoreCase = true) || sceneDiag.contains("you ", ignoreCase = true)
-                        val diagLang = if (isEnglishDiag) "en" else "fr"
-                        val isCharSpeech = SceneItem.isCharacterSpeech(sceneDiag, activeScene?.charactersPresent)
-
-                        if (isCharSpeech && activeScene?.audioMode != "ambient") {
-                            val speakerName = SceneItem.extractCharacterSpeaker(sceneDiag)
-                            val cleanSpoken = SceneItem.extractSpokenSpeech(sceneDiag, activeScene?.charactersPresent).ifBlank { sceneDiag }
-
-                            Surface(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = 20.dp, start = 16.dp, end = 16.dp)
-                                    .fillMaxWidth(0.92f),
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xD909090F),
-                                border = BorderStroke(0.8.dp, Color(0x44FFFFFF))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    val isSpeakingKeyframe by AgnesVoiceManager.isSpeaking.collectAsState()
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .background(if (isSpeakingKeyframe) Color(0xFF7C3AED) else Color(0xFF262638))
-                                            .clickable {
-                                                if (isSpeakingKeyframe) {
-                                                    AgnesVoiceManager.stop()
-                                                } else {
-                                                    val sp = SceneItem.extractSpokenSpeech(sceneDiag, activeScene?.charactersPresent)
-                                                    if (sp.isNotBlank()) AgnesVoiceManager.speak(context, sp, diagLang)
-                                                }
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        AgnesSvgIcon(
-                                            icon = AgnesIcon.AUDIO,
-                                            tint = if (isSpeakingKeyframe) Color.White else Color(0xFFA78BFA),
-                                            size = 12.dp
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        if (speakerName != null) {
-                                            Text(
-                                                text = speakerName.uppercase(),
-                                                color = Color(0xFFA78BFA),
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                letterSpacing = 0.5.sp
-                                            )
-                                        }
-                                        Text(
-                                            text = cleanSpoken,
-                                            color = Color.White,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            lineHeight = 16.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
                 } else {
                     EmptyMediaState(message = "Plan ${activeScene?.number ?: (selectedSceneIndex + 1)} en cours de production...")
