@@ -809,6 +809,91 @@ fun FilmScreen(
                                         )
                                     }
                                 }
+
+                                if (hasKeyframe || hasVideo || (onReshootScene != null && currentFilm != null && scene.status == "failed")) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (hasKeyframe) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color(0xFF1E293B))
+                                                    .border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(6.dp))
+                                                    .clickable {
+                                                        triggerHapticFeedback(context)
+                                                        DownloadHelper.downloadImage(
+                                                            context,
+                                                            scene.keyframe!!,
+                                                            "${currentFilm?.title.orEmpty()} Plan ${scene.number}"
+                                                        )
+                                                    }
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    AgnesSvgIcon(icon = AgnesIcon.DOWNLOAD, tint = Color(0xFF38BDF8), size = 11.dp)
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Image Plan ${scene.number}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                                }
+                                            }
+                                        }
+
+                                        if (hasVideo) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color(0xFF2E1065))
+                                                    .border(1.dp, Color(0xFFA78BFA), RoundedCornerShape(6.dp))
+                                                    .clickable {
+                                                        triggerHapticFeedback(context)
+                                                        DownloadHelper.downloadVideo(
+                                                            context,
+                                                            scene.videoUrl!!,
+                                                            "${currentFilm?.title.orEmpty()} Plan ${scene.number}"
+                                                        )
+                                                    }
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    AgnesSvgIcon(icon = AgnesIcon.DOWNLOAD, tint = Color(0xFFA78BFA), size = 11.dp)
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Vidéo Plan ${scene.number}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.weight(1f))
+
+                                        if (onReshootScene != null && currentFilm != null) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color(0xFF262638))
+                                                    .border(1.dp, Color(0xFF52525B), RoundedCornerShape(6.dp))
+                                                    .clickable {
+                                                        triggerHapticFeedback(context)
+                                                        onReshootScene(
+                                                            currentFilm.id,
+                                                            scene.number,
+                                                            scene.description,
+                                                            scene.dialogue,
+                                                            scene.camera_movement
+                                                        )
+                                                    }
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    AgnesSvgIcon(icon = AgnesIcon.GENERATE, tint = Color(0xFFC4B5FD), size = 10.dp)
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text("Re-tourner", color = Color.White, fontSize = 10.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -1012,28 +1097,81 @@ fun FilmScreen(
                                             )
                                         }
 
-                                        if (onReshootScene != null && currentFilm != null && (hasVideo || hasKeyframe || scene.status == "failed")) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(Color(0xFF2E1065))
-                                                    .border(1.dp, Color(0xFF8B5CF6), RoundedCornerShape(4.dp))
-                                                    .clickable {
-                                                        triggerHapticFeedback(context)
-                                                        onReshootScene(
-                                                            currentFilm.id,
-                                                            scene.number,
-                                                            scene.description,
-                                                            scene.dialogue,
-                                                            scene.camera_movement
-                                                        )
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (hasKeyframe) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(Color(0xFF1E293B))
+                                                        .border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(4.dp))
+                                                        .clickable {
+                                                            triggerHapticFeedback(context)
+                                                            DownloadHelper.downloadImage(
+                                                                context,
+                                                                scene.keyframe!!,
+                                                                "${currentFilm?.title.orEmpty()} Plan ${scene.number}"
+                                                            )
+                                                        }
+                                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        AgnesSvgIcon(icon = AgnesIcon.DOWNLOAD, tint = Color(0xFF38BDF8), size = 9.dp)
+                                                        Spacer(modifier = Modifier.width(2.dp))
+                                                        Text("Img", color = Color.White, fontSize = 8.sp)
                                                     }
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    AgnesSvgIcon(icon = AgnesIcon.GENERATE, tint = Color(0xFFC4B5FD), size = 10.dp)
-                                                    Spacer(modifier = Modifier.width(3.dp))
-                                                    Text("Re-tourner", color = Color.White, fontSize = 9.sp)
+                                                }
+                                            }
+
+                                            if (hasVideo) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(Color(0xFF2E1065))
+                                                        .border(1.dp, Color(0xFFA78BFA), RoundedCornerShape(4.dp))
+                                                        .clickable {
+                                                            triggerHapticFeedback(context)
+                                                            DownloadHelper.downloadVideo(
+                                                                context,
+                                                                scene.videoUrl!!,
+                                                                "${currentFilm?.title.orEmpty()} Plan ${scene.number}"
+                                                            )
+                                                        }
+                                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        AgnesSvgIcon(icon = AgnesIcon.DOWNLOAD, tint = Color(0xFFA78BFA), size = 9.dp)
+                                                        Spacer(modifier = Modifier.width(2.dp))
+                                                        Text("Vid", color = Color.White, fontSize = 8.sp)
+                                                    }
+                                                }
+                                            }
+
+                                            if (onReshootScene != null && currentFilm != null && (hasVideo || hasKeyframe || scene.status == "failed")) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(Color(0xFF262638))
+                                                        .border(1.dp, Color(0xFF52525B), RoundedCornerShape(4.dp))
+                                                        .clickable {
+                                                            triggerHapticFeedback(context)
+                                                            onReshootScene(
+                                                                currentFilm.id,
+                                                                scene.number,
+                                                                scene.description,
+                                                                scene.dialogue,
+                                                                scene.camera_movement
+                                                            )
+                                                        }
+                                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        AgnesSvgIcon(icon = AgnesIcon.GENERATE, tint = Color(0xFFC4B5FD), size = 9.dp)
+                                                        Spacer(modifier = Modifier.width(2.dp))
+                                                        Text("Re-tourner", color = Color.White, fontSize = 8.sp)
+                                                    }
                                                 }
                                             }
                                         }

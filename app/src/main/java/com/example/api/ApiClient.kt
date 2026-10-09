@@ -137,12 +137,12 @@ class ApiClient(
         var lastErrorMsg = "Erreur de connexion à l'API Agnes"
         var lastErrorCode = 500
 
-        while (attempts < 3) {
+        while (attempts < 5) {
             if (stopRequested()) throw CancellationException("Annulé par l'utilisateur")
             attempts++
 
             try {
-                onProgress?.invoke("Génération par l'API Agnes ($model) - Tentative $attempts...")
+                onProgress?.invoke("Génération par l'API Agnes ($model) - Tentative $attempts/5...")
                 val response = okHttpClient.newCall(request).execute()
                 val code = response.code
                 val responseBody = response.body?.string().orEmpty()
@@ -167,11 +167,13 @@ class ApiClient(
                         lastErrorMsg = "L'API Agnes a répondu avec une liste d'images vide"
                     }
                 } else if (code == 429) {
-                    TechnicalLogManager.log("API_IMG", "429 Rate Limit - Pause 90s", "WARN")
+                    TechnicalLogManager.log("API_IMG", "429 Rate Limit - Pause 25s", "WARN")
                     rateLimiter.realWait(RateLimiter.RETRY_429_WAIT_MS, stopRequested)
                     continue
                 } else if (code == 503) {
-                    TechnicalLogManager.log("API_IMG", "503 Serveur occupé - Attente 20s", "WARN")
+                    val waitSec = (RateLimiter.RETRY_503_WAIT_MS / 1000).toInt()
+                    TechnicalLogManager.log("API_IMG", "503 Serveur occupé - Attente ${waitSec}s (essai $attempts/5)", "WARN")
+                    onProgress?.invoke("Serveur Agnes temporairement saturé (503) - Nouvelle tentative dans ${waitSec}s ($attempts/5)...")
                     rateLimiter.realWait(RateLimiter.RETRY_503_WAIT_MS, stopRequested)
                     continue
                 } else if (code == 401 || code == 403) {
@@ -283,7 +285,7 @@ class ApiClient(
         var lastErrorMsg = "Échec d'initialisation de la vidéo sur l'API Agnes"
         var lastErrorCode = 500
 
-        while (attempts < 3) {
+        while (attempts < 5) {
             if (stopRequested()) throw CancellationException("Annulé par l'utilisateur")
             attempts++
 
@@ -308,11 +310,12 @@ class ApiClient(
                         )
                     }
                 } else if (code == 429) {
-                    TechnicalLogManager.log("API_VID", "429 Rate Limit - Attente 90s", "WARN")
+                    TechnicalLogManager.log("API_VID", "429 Rate Limit - Attente 25s", "WARN")
                     rateLimiter.realWait(RateLimiter.RETRY_429_WAIT_MS, stopRequested)
                     continue
                 } else if (code == 503) {
-                    TechnicalLogManager.log("API_VID", "503 Serveur occupé - Attente 20s", "WARN")
+                    val waitSec = (RateLimiter.RETRY_503_WAIT_MS / 1000).toInt()
+                    TechnicalLogManager.log("API_VID", "503 Serveur occupé - Attente ${waitSec}s (essai $attempts/5)", "WARN")
                     rateLimiter.realWait(RateLimiter.RETRY_503_WAIT_MS, stopRequested)
                     continue
                 } else if (code == 401 || code == 403) {
@@ -422,8 +425,12 @@ class ApiClient(
                         onProgressUpdate(progress, "processing", false)
                     }
                 } else if (code == 429) {
-                    TechnicalLogManager.log("POLL", "429 Rate limit pendant le polling - Pause 90s", "WARN")
+                    TechnicalLogManager.log("POLL", "429 Rate limit pendant le polling - Pause 25s", "WARN")
                     rateLimiter.realWait(RateLimiter.RETRY_429_WAIT_MS, stopRequested)
+                } else if (code == 503) {
+                    val waitSec = (RateLimiter.RETRY_503_WAIT_MS / 1000).toInt()
+                    TechnicalLogManager.log("POLL", "503 Serveur occupé pendant le polling - Attente ${waitSec}s", "WARN")
+                    rateLimiter.realWait(RateLimiter.RETRY_503_WAIT_MS, stopRequested)
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -617,7 +624,7 @@ class ApiClient(
             }
 
             var batchSuccess = false
-            for (attempt in 1..2) {
+            for (attempt in 1..3) {
                 if (stopRequested()) throw CancellationException("Annulé par l'utilisateur")
                 try {
                     val messages = JSONArray().apply {
@@ -639,6 +646,7 @@ class ApiClient(
                         .build()
 
                     val response = okHttpClient.newCall(request).execute()
+                    val responseCode = response.code
                     val body = response.body?.string().orEmpty()
 
                     if (response.isSuccessful) {
@@ -863,13 +871,20 @@ class ApiClient(
 
                         batchSuccess = true
                         break
+                    } else if (responseCode == 503) {
+                        val waitSec = (RateLimiter.RETRY_503_WAIT_MS / 1000).toInt()
+                        TechnicalLogManager.log("PHASE_1", "503 Serveur occupé - Attente ${waitSec}s (lot $startScene-$endScene, essai $attempt/3)", "WARN")
+                        rateLimiter.realWait(RateLimiter.RETRY_503_WAIT_MS, stopRequested)
+                    } else if (responseCode == 429) {
+                        TechnicalLogManager.log("PHASE_1", "429 Rate limit - Pause 25s", "WARN")
+                        rateLimiter.realWait(RateLimiter.RETRY_429_WAIT_MS, stopRequested)
                     } else {
-                        delay(1000L * attempt)
+                        delay(1500L * attempt)
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    TechnicalLogManager.log("PHASE_1", "Tentative $attempt/2 sur le lot $startScene-$endScene : ${e.message}", "WARN")
-                    delay(1000L * attempt)
+                    TechnicalLogManager.log("PHASE_1", "Tentative $attempt/3 sur le lot $startScene-$endScene : ${e.message}", "WARN")
+                    delay(1500L * attempt)
                 }
             }
 

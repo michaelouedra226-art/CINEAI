@@ -1552,6 +1552,29 @@ fun FilmPlayerView(
                         }
                     }
 
+                    if (activeScene?.keyframe != null) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF1E293B))
+                                .border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(6.dp))
+                                .clickable {
+                                    triggerHapticFeedback(context)
+                                    DownloadHelper.downloadImage(
+                                        context,
+                                        activeScene.keyframe,
+                                        "${film.title} Plan ${activeScene.number}"
+                                    )
+                                }
+                                .padding(horizontal = 7.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            AgnesSvgIcon(icon = AgnesIcon.DOWNLOAD, tint = Color(0xFF38BDF8), size = 11.dp)
+                            Text(text = "Img P${activeScene.number}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
                     if (activeScene?.videoUrl != null) {
                         Row(
                             modifier = Modifier
@@ -1570,7 +1593,7 @@ fun FilmPlayerView(
                             horizontalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
                             AgnesSvgIcon(icon = AgnesIcon.DOWNLOAD, tint = Color.White, size = 11.dp)
-                            Text(text = "P${activeScene.number}", color = Color.White, fontSize = 11.sp)
+                            Text(text = "Vid P${activeScene.number}", color = Color.White, fontSize = 11.sp)
                         }
                     }
                 }
