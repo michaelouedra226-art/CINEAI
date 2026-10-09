@@ -523,7 +523,6 @@ fun VideoPlayerComponent(
     var areControlsVisible by remember(videoUrl) { mutableStateOf(true) }
     var isUserScrubbing by remember { mutableStateOf(false) }
 
-    val isSpeaking by AgnesVoiceManager.isSpeaking.collectAsState()
     val isTrueCharacterSpeech = remember(dialogue, charactersPresent) {
         SceneItem.isCharacterSpeech(dialogue, charactersPresent)
     }
@@ -562,7 +561,6 @@ fun VideoPlayerComponent(
     DisposableEffect(videoUrl) {
         onDispose {
             videoViewRef?.stopPlayback()
-            AgnesVoiceManager.stop()
         }
     }
 
@@ -590,13 +588,6 @@ fun VideoPlayerComponent(
                                 mp.isLooping = isLooping
                                 start()
                                 isPlaying = true
-                                // Déclenchement TTS STRICTEMENT réservé aux répliques des personnages
-                                if (isTrueCharacterSpeech && audioMode != "ambient") {
-                                    val speech = SceneItem.extractSpokenSpeech(dialogue.orEmpty(), charactersPresent)
-                                    if (speech.isNotBlank()) {
-                                        AgnesVoiceManager.speak(ctx, speech, dialogueLanguage)
-                                    }
-                                }
                             }
                             setOnErrorListener { _, _, _ ->
                                 isBuffering = false
@@ -811,52 +802,27 @@ fun VideoPlayerComponent(
                     .fillMaxWidth(0.92f),
                 shape = RoundedCornerShape(8.dp),
                 color = Color(0xD909090F),
-                border = BorderStroke(0.8.dp, if (isSpeaking) Color(0xFFA78BFA) else Color(0x44FFFFFF))
+                border = BorderStroke(0.8.dp, Color(0x44FFFFFF))
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(if (isSpeaking) Color(0xFF7C3AED) else Color(0xFF262638))
-                            .clickable {
-                                if (isSpeaking) {
-                                    AgnesVoiceManager.stop()
-                                } else {
-                                    val sp = SceneItem.extractSpokenSpeech(dialogue.orEmpty(), charactersPresent)
-                                    if (sp.isNotBlank()) AgnesVoiceManager.speak(context, sp, dialogueLanguage)
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AgnesSvgIcon(
-                            icon = AgnesIcon.AUDIO,
-                            tint = if (isSpeaking) Color.White else Color(0xFFA78BFA),
-                            size = 12.dp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        if (speakerName != null) {
-                            Text(
-                                text = speakerName.uppercase(),
-                                color = Color(0xFFA78BFA),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
+                    if (speakerName != null) {
                         Text(
-                            text = speechContent,
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            lineHeight = 16.sp
+                            text = speakerName.uppercase(),
+                            color = Color(0xFFA78BFA),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
                         )
                     }
+                    Text(
+                        text = speechContent,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 16.sp
+                    )
                 }
             }
         }
